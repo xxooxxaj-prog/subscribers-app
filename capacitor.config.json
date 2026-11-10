@@ -1,0 +1,11 @@
+{
+  "appId": "com.web777.subscribers",
+  "appName": "777 Subscribers",
+  "webDir": "www",
+  "server": {
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
