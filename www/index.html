@@ -1,0 +1,3802 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عرض المشتركين - مع التسعير المتعدد 🇺🇸 🇹🇷 🇸🇾</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background: #f4f7fc; margin: 0; display: flex; justify-content: center; }
+    .container { width: 100%; padding: 8px 4px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    h1 { font-size: 20px; margin-top: 0; color: #1a2a4a; border-bottom: 2px solid #2a7de1; padding-bottom: 8px; }
+
+    .upload-area {
+      background: linear-gradient(135deg, #eef3fa 0%, #f8faff 100%);
+      padding: 8px 12px; border-radius: 12px; margin-bottom: 10px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      border: 1px solid #dce5f0; min-height: 52px; transition: all 0.2s ease;
+    }
+    .upload-area.dragover {
+      border-color: #2a7de1;
+      background: linear-gradient(135deg, #dbeafe 0%, #eef3fa 100%);
+      box-shadow: 0 0 0 3px rgba(42,125,225,0.2);
+    }
+
+    .icon-btn {
+      width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%;
+      cursor: pointer; font-size: 17px; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: all 0.2s ease; font-family: inherit; color: white;
+      flex-shrink: 0; position: relative; box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    }
+    .icon-btn:hover { transform: translateY(-2px) scale(1.06); box-shadow: 0 5px 14px rgba(0,0,0,0.22); }
+    .icon-btn:active { transform: translateY(0) scale(0.96); }
+    .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+    .icon-btn.blue   { background: linear-gradient(135deg, #2a7de1, #1a5cb0); }
+    .icon-btn.green  { background: linear-gradient(135deg, #43a047, #2e7d32); }
+    .icon-btn.orange { background: linear-gradient(135deg, #fb8c00, #e65100); }
+    .icon-btn.teal   { background: linear-gradient(135deg, #26a69a, #00796b); }
+    .icon-btn.red    { background: linear-gradient(135deg, #e53935, #c62828); }
+    .icon-btn.gray   { background: linear-gradient(135deg, #78909c, #546e7a); }
+    .icon-btn.purple { background: linear-gradient(135deg, #8e24aa, #6a1b9a); }
+    .icon-btn.gold   { background: linear-gradient(135deg, #f9a825, #f57f17); }
+
+    .icon-btn.save-btn.pulse {
+      animation: savePulseBtn 1.4s ease-in-out infinite;
+    }
+    @keyframes savePulseBtn {
+      0%, 100% { box-shadow: 0 2px 6px rgba(0,0,0,0.12), 0 0 0 0 rgba(67,160,71,0.65); }
+      50%      { box-shadow: 0 2px 6px rgba(0,0,0,0.12), 0 0 0 10px rgba(67,160,71,0); }
+    }
+    .icon-btn.save-btn.busy { background: linear-gradient(135deg, #fb8c00, #e65100); }
+    .icon-btn.save-btn.ok   { background: linear-gradient(135deg, #43a047, #2e7d32); }
+    .icon-btn.save-btn.err  { background: linear-gradient(135deg, #e53935, #c62828); }
+
+    .icon-btn.small { width: 30px; height: 30px; font-size: 14px; }
+
+    .icon-btn.with-label {
+      width: auto; height: 34px; border-radius: 20px;
+      padding: 0 14px 0 10px; gap: 6px; font-size: 12px; font-weight: 700;
+    }
+    .icon-btn.with-label .btn-icon { font-size: 13px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+    .icon-btn.with-label .btn-label { font-size: 12px; white-space: nowrap; line-height: 1; }
+
+    .icon-btn.loading { pointer-events: none; opacity: 0.7; }
+    .icon-btn.loading .btn-icon { animation: spinIcon 0.8s linear infinite; }
+    @keyframes spinIcon { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    .hidden-file-input {
+      position: fixed; left: -9999px; top: -9999px;
+      opacity: 0; pointer-events: none;
+    }
+
+    .upload-divider {
+      width: 1px; height: 26px; background: #c5d2e3;
+      margin: 0 2px; flex-shrink: 0;
+    }
+
+    .file-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border-radius: 20px; font-weight: 600;
+      font-size: 11.5px; background: #fff; border: 1px solid #dce5f0;
+      color: #6a7e9e; transition: all 0.2s; white-space: nowrap;
+      max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+      cursor: help; position: relative;
+    }
+    .file-chip.ok      { background: #e8f5e9; border-color: #a5d6a7; color: #2e7d32; }
+    .file-chip.fail    { background: #ffebee; border-color: #ef9a9a; color: #c62828; }
+    .file-chip.loading { background: #fff3e0; border-color: #ffcc80; color: #e65100; }
+    .file-chip.folder  { background: #e3f2fd; border-color: #90caf9; color: #1565c0; }
+    .file-chip.fav     { background: #fff8e1; border-color: #ffcc80; color: #e65100; }
+
+    .file-chip[data-tooltip]:hover::after,
+    .file-chip[title]:hover::after {
+      content: attr(title); position: absolute; bottom: calc(100% + 10px);
+      left: 50%; transform: translateX(-50%);
+      background: linear-gradient(135deg, #1f3a5f, #2a4a7a);
+      color: #fff; padding: 10px 14px; border-radius: 10px;
+      font-size: 12px; font-weight: 500; line-height: 1.7;
+      white-space: pre-line; text-align: right; direction: rtl;
+      min-width: 240px; max-width: 380px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      z-index: 9999; pointer-events: none;
+      animation: tooltipFadeIn 0.2s ease;
+      border: 1px solid rgba(255,255,255,0.1);
+      font-family: 'Consolas', 'Courier New', monospace;
+    }
+    .file-chip[data-tooltip]:hover::before,
+    .file-chip[title]:hover::before {
+      content: ''; position: absolute; bottom: calc(100% + 4px);
+      left: 50%; transform: translateX(-50%);
+      border: 6px solid transparent; border-top-color: #1f3a5f;
+      z-index: 9999; pointer-events: none;
+      animation: tooltipFadeIn 0.2s ease;
+    }
+    @keyframes tooltipFadeIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    .save-status {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 12px; border-radius: 20px; font-size: 11.5px;
+      font-weight: 600; background: #f0f4fa; color: #6a7e9e;
+      border: 1px solid #dce5f0; transition: 0.25s; white-space: nowrap;
+      position: relative;
+    }
+    .save-status.saving { background: #fff3e0; color: #e65100; border-color: #ffcc80; animation: savePulse 1.4s ease-in-out infinite; }
+    .save-status.saved  { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+    .save-status.error  { background: #ffebee; color: #c62828; border-color: #ef9a9a; }
+    .save-status.dirty  { background: #fff8e1; color: #b45309; border-color: #ffcc80; }
+    @keyframes savePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(230,81,0,0.35); }
+      50%      { box-shadow: 0 0 0 7px rgba(230,81,0,0); }
+    }
+
+    .hidden-el { display: none !important; }
+
+    /* ====== أيقونة الكيبورد داخل مربع البحث ====== */
+    .search-input-wrap {
+      position: relative;
+      width: 100%;
+      height: 30px;
+      flex-shrink: 0;
+    }
+    .search-input-wrap input[type="text"] {
+      padding-left: 30px !important;
+      padding-right: 8px !important;
+      width: 100% !important;
+      height: 30px !important;
+    }
+    .vk-toggle-btn {
+      position: absolute;
+      left: 3px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 5px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+      z-index: 2;
+      color: #2a7de1;
+    }
+    .vk-toggle-btn:hover {
+      background: #dbeafe;
+      transform: translateY(-50%) scale(1.1);
+    }
+    .vk-toggle-btn.active {
+      background: #2a7de1;
+      color: #ffffff;
+    }
+    .vk-toggle-btn svg {
+      width: 16px;
+      height: 16px;
+      pointer-events: none;
+      display: block;
+      color: inherit;
+      stroke: currentColor;
+    }
+
+    /* ====== لوحة الكيبورد الافتراضي ====== */
+    .virtual-keyboard {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(30px);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 9998;
+      background: linear-gradient(135deg, #1f3a5f 0%, #2a4a7a 100%);
+      border-radius: 14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+      padding: 10px 12px 12px;
+      direction: ltr;
+      max-width: calc(100vw - 16px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      user-select: none;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .virtual-keyboard.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+    .vk-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      padding: 0 2px;
+    }
+    .vk-title {
+      color: #a5d6a7;
+      font-size: 12px;
+      font-weight: 700;
+      flex: 1;
+    }
+    .vk-lang-switch {
+      display: flex;
+      gap: 3px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .vk-lang-btn {
+      border: none;
+      background: transparent;
+      color: #cfd8dc;
+      padding: 3px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: 0.15s;
+    }
+    .vk-lang-btn:hover { background: rgba(255,255,255,0.12); color: white; }
+    .vk-lang-btn.active {
+      background: #43a047;
+      color: white;
+      box-shadow: 0 2px 6px rgba(67,160,71,0.4);
+    }
+    .vk-close-btn {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: white;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+      transition: 0.15s;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .vk-close-btn:hover { background: #e53935; transform: rotate(90deg); }
+    .vk-body { display: flex; flex-direction: column; gap: 5px; }
+    .vk-row {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+    }
+    .vk-key {
+      min-width: 34px;
+      height: 38px;
+      padding: 0 8px;
+      border: none;
+      border-radius: 7px;
+      background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+      color: #1f3a5f;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      box-shadow: 0 2px 0 #94a3b8, 0 3px 6px rgba(0,0,0,0.15);
+      transition: all 0.08s ease;
+      user-select: none;
+    }
+    .vk-key:hover {
+      background: linear-gradient(180deg, #ffffff, #f1f5f9);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 0 #94a3b8, 0 4px 8px rgba(0,0,0,0.18);
+    }
+    .vk-key:active {
+      transform: translateY(2px);
+      box-shadow: 0 0 0 #94a3b8, 0 1px 2px rgba(0,0,0,0.15);
+      background: #cbd5e1;
+    }
+    .vk-key.vk-special {
+      background: linear-gradient(180deg, #fb8c00, #e65100);
+      color: white;
+      box-shadow: 0 2px 0 #bf360c, 0 3px 6px rgba(0,0,0,0.2);
+    }
+    .vk-key.vk-special:hover {
+      background: linear-gradient(180deg, #ffa726, #f57c00);
+    }
+    .vk-key.vk-space {
+      flex: 1;
+      max-width: 240px;
+      background: linear-gradient(180deg, #2a7de1, #1a5cb0);
+      color: white;
+      box-shadow: 0 2px 0 #14304d, 0 3px 6px rgba(0,0,0,0.2);
+    }
+    .vk-key.vk-space:hover {
+      background: linear-gradient(180deg, #4a90e2, #2a7de1);
+    }
+    @media (max-width: 480px) {
+      .vk-key { min-width: 26px; height: 32px; padding: 0 4px; font-size: 12px; border-radius: 5px; }
+      .vk-row { gap: 3px; }
+      .virtual-keyboard { padding: 8px; bottom: 10px; }
+      .vk-lang-btn { padding: 2px 8px; font-size: 10px; }
+    }
+
+    .search-section { display: flex; flex-wrap: nowrap; gap: 6px; background: #f8faff; padding: 4px 10px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #dce5f0; align-items: center; height: 60px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+    .search-section::-webkit-scrollbar { height: 5px; }
+    .search-section::-webkit-scrollbar-thumb { background: #c5d2e3; border-radius: 3px; }
+    .search-group { display: flex; flex-direction: column; gap: 1px; flex: 0 0 auto; height: 100%; justify-content: center; min-width: 0; }
+    .search-group label { font-size: 10px; font-weight: 700; color: #1f3a5f; white-space: nowrap; line-height: 1; padding: 0 2px; margin: 0; text-align: center; }
+    .search-group input[type="text"], .search-group input[type="number"], .search-group input[type="date"], .search-group select { padding: 3px 8px; border: 1px solid #bcc9db; border-radius: 6px; font-size: 12px; background: white; transition: 0.2s; width: 100%; font-family: inherit; color: #1a2a4a; height: 30px; min-width: 0; cursor: pointer; }
+    .search-group select { padding-left: 4px; padding-right: 4px; }
+    .search-group input:focus, .search-group select:focus { border-color: #2a7de1; outline: none; box-shadow: 0 0 0 2px rgba(42,125,225,0.15); }
+
+    @keyframes searchPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 124, 0, 0.55); border-color: #f57c00; background: #fff8e1; }
+      50% { box-shadow: 0 0 0 8px rgba(245, 124, 0, 0); border-color: #ffb74d; background: #ffffff; }
+    }
+    .search-group input.search-active, .search-group select.search-active { animation: searchPulse 1.3s ease-in-out infinite; font-weight: 700; color: #b45309; }
+
+    .search-group .btn-reset, .search-group .btn-export { width: 100%; height: 30px; padding: 0; font-size: 15px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; font-family: inherit; }
+    .search-group .btn-reset { background: #e0e7f0; color: #1f3a5f; }
+    .search-group .btn-reset:hover { background: #ccd6e3; }
+    .search-group .btn-export { background: #e65100; color: white; }
+    .search-group .btn-export:hover { background: #bf360c; }
+    .results-count { font-size: 12px; color: #1f3a5f; align-self: center; white-space: nowrap; margin-right: auto; padding: 0 12px; background: #e8f0fc; border-radius: 20px; font-weight: 600; height: 28px; display: flex; align-items: center; flex-shrink: 0; }
+
+    .table-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid #dce5f0; background: white; }
+    table { font-size: medium; width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 0; }
+    th, td { padding: clamp(2px, 0.4vw, 5px) clamp(1px, 0.35vw, 5px); text-align: center; vertical-align: middle; border-bottom: 1px solid #e6edf6; word-break: break-word; overflow-wrap: anywhere; overflow: hidden; }
+    th { background: #1f3a5f; color: white; font-weight: 600; position: sticky; top: 0; z-index: 5; cursor: pointer; white-space: nowrap; font-size: clamp(9px, 1vw, 12px); user-select: none; overflow: hidden; text-overflow: ellipsis; }
+    th:hover { background: #2a4a7a; }
+    th .sort-icon { margin-right: 3px; font-size: 10px; opacity: 0.85; }
+    td { background: white; }
+    tr:nth-child(even) td { background: #f5f5f5; }
+    tr:hover td { background: #dcdcdc; }
+    .no-data { text-align: center; padding: 25px; color: #6a7e9e; font-size: 14px; background: #f9fbfe; }
+
+    td.td-price {
+      background: #eef7ff !important; font-weight: 700; color: #0d47a1;
+      border-left: 1px solid #d6e8f7; border-right: 1px solid #d6e8f7;
+    }
+    tr:nth-child(even) td.td-price { background: #e3f0fd !important; }
+    tr:hover td.td-price { background: #cfe4fb !important; }
+
+    th.col-priceusd, th.col-pricetl, th.col-pricesp {
+      background: #14304d !important;
+      border-left: 1px solid #0e2338; border-right: 1px solid #0e2338;
+    }
+    th.col-priceusd:hover, th.col-pricetl:hover, th.col-pricesp:hover { background: #1d4470 !important; }
+
+    td.td-fullname {
+      background: #fff8e7 !important; font-weight: 700; color: #5d4037;
+      border-left: 1px solid #f0e0b8; border-right: 1px solid #f0e0b8;
+      text-align: right; padding-right: 8px;
+    }
+    tr:nth-child(even) td.td-fullname { background: #fdf0d1 !important; }
+    tr:hover td.td-fullname { background: #fbe0a8 !important; }
+    th.col-fullname {
+      background: #7a4b00 !important;
+      border-left: 1px solid #5d3900; border-right: 1px solid #5d3900;
+    }
+    th.col-fullname:hover { background: #a36600 !important; }
+
+    .fav-btn {
+      background: transparent; border: none; cursor: pointer;
+      font-size: 15px; line-height: 1; padding: 0 4px; margin: 0 2px;
+      opacity: 0.35; transition: all 0.18s ease; font-family: inherit;
+      color: #f9a825; flex-shrink: 0; vertical-align: middle;
+    }
+    .fav-btn:hover { opacity: 1; transform: scale(1.25); filter: drop-shadow(0 0 3px rgba(249,168,37,0.7)); }
+    .fav-btn.active { opacity: 1; filter: drop-shadow(0 1px 2px rgba(249,168,37,0.5)); }
+    .fav-btn.active:hover { transform: scale(1.25) rotate(-8deg); }
+
+    tr.is-favorite td.col-index {
+      background: #fff3c4 !important; color: #b76e00 !important;
+      box-shadow: inset 3px 0 0 #f9a825;
+    }
+
+    .flag-icon { width: 16px; height: auto; vertical-align: middle; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.18); display: inline-block; margin: 0 1px; }
+    th .flag-icon { width: 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+
+    .col-index { width: 3.5%; } .col-username { width: 8%; } .col-fullname { width: 15%; }
+    .col-expiration { width: 9%; } .col-service { width: 5%; } .col-priceusd { width: 5.5%; }
+    .col-pricetl { width: 6.5%; } .col-pricesp { width: 6.5%; } .col-address { width: 6.5%; }
+    .col-block { width: 3.5%; } .col-house { width: 3.5%; } .col-ip { width: 8%; }
+    .col-wifi { width: 7%; } .col-wifipass { width: 7%; } .col-routerpass { width: 7%; }
+
+    .speed-1M { font-weight: bold; color: #2e7d32; } .speed-2M { font-weight: bold; color: #1565c0; }
+    .speed-3M { font-weight: bold; color: #6a1b9a; } .speed-5M { font-weight: bold; color: #e65100; }
+    .speed-8M { font-weight: bold; color: #bf360c; } .speed-10M { font-weight: bold; color: #880e4f; }
+    .speed-default { font-weight: bold; color: #37474f; }
+
+    td.exp-past { background: #ffebee !important; color: #c62828 !important; font-weight: 700; }
+    td.exp-today { background: #fff3e0 !important; color: #e65100 !important; font-weight: 700; }
+    td.exp-future { background: #e8f5e9 !important; color: #2e7d32 !important; font-weight: 700; }
+    td.exp-unknown { background: #eceff1 !important; color: #607d8b !important; }
+    tr:hover td.exp-past { background: #ffcdd2 !important; }
+    tr:hover td.exp-today { background: #ffe0b2 !important; }
+    tr:hover td.exp-future { background: #c8e6c9 !important; }
+    tr:hover td.exp-unknown { background: #cfd8dc !important; }
+
+    .clickable-name { cursor: pointer; color: #000000; font-weight: 700; border-bottom: 1px dashed transparent; transition: 0.15s; display: inline-block; padding: 1px 3px; }
+    .clickable-name:hover { color: #1a5cb0; border-bottom-color: #1a5cb0; background: #e8f0fc; border-radius: 4px; }
+
+    .user-cell { display: inline-flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; max-width: 100%; }
+    .user-link { color: #2a7de1; text-decoration: none; font-weight: 600; transition: 0.15s; padding: 1px 2px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; display: inline-block; cursor: pointer; }
+    .user-link:hover { color: #1a5cb0; background: #e8f0fc; text-decoration: underline; }
+
+    .copy-username-btn { background: transparent; border: none; cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 4px; transition: all 0.15s; opacity: 0.55; line-height: 1; font-family: inherit; color: #1f3a5f; flex-shrink: 0; }
+    .copy-username-btn:hover { opacity: 1; background: #dbeafe; transform: scale(1.15); }
+    .copy-username-btn.copied { color: #2e7d32; opacity: 1; background: #dcfce7; transform: scale(1.15); }
+
+    .extra-input { width: 100%; min-width: 0; max-width: 100%; padding: clamp(1px, 0.3vw, 3px) clamp(2px, 0.4vw, 5px); border: 1px solid transparent; border-radius: 4px; font-size: clamp(9px, 0.9vw, 11px); font-family: inherit; text-align: center; background: transparent; color: #1a2a4a; transition: 0.15s; direction: ltr; box-sizing: border-box; }
+    .extra-input::placeholder { color: #b0bdd0; font-size: clamp(9px, 0.9vw, 11px); }
+    .extra-input:hover { background: #f0f4fa; border-color: #dce5f0; }
+    .extra-input:focus { background: white; border-color: #2a7de1; outline: none; box-shadow: 0 0 0 2px rgba(42,125,225,0.15); }
+    .extra-input.has-value { background: #f0f9ff; font-weight: 600; color: #0d47a1; }
+    .extra-input.unsaved { background: #fff8e1; border-color: #ffb74d; }
+
+    .extra-input.saving {
+      background: #fff3e0 !important;
+      border-color: #fb8c00 !important;
+      color: #e65100 !important;
+      transition: all 0.2s ease;
+    }
+    .extra-input.saved {
+      background: #e8f5e9 !important;
+      border-color: #43a047 !important;
+      color: #2e7d32 !important;
+      animation: savedFlash 1.3s ease;
+    }
+    .extra-input.error {
+      background: #ffebee !important;
+      border-color: #e53935 !important;
+      color: #c62828 !important;
+      animation: cellShake 0.4s ease;
+    }
+    @keyframes savedFlash {
+      0%   { box-shadow: 0 0 0 0 rgba(67,160,71,0.65); }
+      100% { box-shadow: 0 0 0 10px rgba(67,160,71,0); }
+    }
+    @keyframes cellShake {
+      0%, 100% { transform: translateX(0); }
+      20%      { transform: translateX(-4px); }
+      40%      { transform: translateX(4px); }
+      60%      { transform: translateX(-3px); }
+      80%      { transform: translateX(3px); }
+    }
+
+    .ip-display { display: inline-flex; align-items: center; justify-content: center; gap: 2px; max-width: 100%; white-space: nowrap; width: 100%; }
+    .ip-link { color: #0d47a1; font-weight: 700; text-decoration: none; padding: 1px 4px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100% - 22px); display: inline-block; transition: 0.15s; direction: ltr; font-family: 'Courier New', monospace; font-size: clamp(9px, 0.9vw, 11px); }
+    .ip-link:hover { background: #e3f2fd; color: #1565c0; text-decoration: underline; }
+    .ip-edit-btn { background: transparent; border: none; cursor: pointer; font-size: clamp(9px, 0.9vw, 11px); padding: 1px 3px; border-radius: 4px; opacity: 0.35; transition: all 0.15s; color: #1f3a5f; flex-shrink: 0; line-height: 1; font-family: inherit; }
+    .ip-edit-btn:hover { opacity: 1; background: #dbeafe; transform: scale(1.15); }
+    .ip-empty { color: #b0bdd0; font-size: clamp(9px, 0.9vw, 11px); cursor: pointer; padding: 1px 6px; border-radius: 4px; display: inline-block; transition: 0.15s; border: 1px dashed transparent; }
+    .ip-empty:hover { background: #eef3fa; color: #2a7de1; border-color: #2a7de1; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15, 25, 45, 0.55); backdrop-filter: blur(3px); z-index: 999; justify-content: center; align-items: center; padding: 15px; animation: fadeIn 0.2s ease; }
+    .modal-overlay.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-box { background: #fff; border-radius: 14px; width: 100%; max-width: 620px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: slideUp 0.25s ease; direction: rtl; }
+    .modal-header { background: linear-gradient(135deg, #1f3a5f, #2a7de1); color: white; padding: 14px 18px; border-radius: 14px 14px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 2; }
+    .modal-header h2 { margin: 0; font-size: 17px; font-weight: 600; }
+    .modal-close { background: rgba(255,255,255,0.2); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1; transition: 0.2s; }
+    .modal-close:hover { background: rgba(255,255,255,0.35); transform: rotate(90deg); }
+    .modal-body { padding: 20px 22px; }
+    .modal-section p { font-size: 15px; color: #1a2a4a; line-height: 1.9; margin: 0 0 8px 0; }
+    .modal-section p.section-gap { margin-top: 16px; }
+    .modal-status { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+    .modal-status.past { background: #ffebee; color: #c62828; }
+    .modal-status.today { background: #fff3e0; color: #e65100; }
+    .modal-status.future { background: #e8f5e9; color: #2e7d32; }
+    .modal-status.unknown { background: #eceff1; color: #607d8b; }
+    .modal-footer { padding: 10px 18px 16px; display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid #e6edf6; flex-wrap: wrap; }
+    .modal-footer button { padding: 7px 16px; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; font-family: inherit; }
+    .btn-copy { background: #2a7de1; color: white; } .btn-copy:hover { background: #1a5cb0; }
+    .btn-save { background: #2e7d32; color: white; } .btn-save:hover { background: #1b5e20; }
+    .btn-purple { background: #6a1b9a; color: white; } .btn-purple:hover { background: #4a148c; }
+    .btn-reset-default { background: #e65100; color: white; } .btn-reset-default:hover { background: #bf360c; }
+    .btn-close-modal { background: #e0e7f0; color: #1f3a5f; } .btn-close-modal:hover { background: #ccd6e3; }
+
+    .copy-toast { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100px); background: #2e7d32; color: white; padding: 10px 22px; border-radius: 30px; font-size: 13px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,0.25); z-index: 10000; opacity: 0; transition: all 0.3s ease; pointer-events: none; }
+    .copy-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .copy-toast.error { background: #c62828; }
+    .copy-toast.info { background: #1565c0; }
+    .copy-toast.gold { background: linear-gradient(135deg, #f9a825, #e65100); }
+
+    .columns-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .column-check { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f8faff; border: 1.5px solid #dce5f0; border-radius: 8px; cursor: pointer; transition: 0.15s; user-select: none; font-size: 13px; font-weight: 600; color: #1f3a5f; }
+    .column-check:hover { background: #e3ecfa; border-color: #2a7de1; }
+    .column-check input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: #2a7de1; transform: scale(1.15); flex-shrink: 0; }
+    .column-check.checked { background: #e8f0fc; border-color: #2a7de1; color: #0d47a1; }
+
+    .export-options { margin-bottom: 10px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .export-sort-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #f0f4fa; border: 1.5px solid #dce5f0; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: #1f3a5f; transition: 0.15s; user-select: none; }
+    .export-sort-toggle:hover { background: #e3ecfa; border-color: #2a7de1; }
+    .export-sort-toggle input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #2a7de1; }
+    .export-textarea { width: 100%; min-height: 300px; padding: 12px 14px; border: 1.5px solid #dce5f0; border-radius: 8px; font-family: 'Courier New', Consolas, monospace; font-size: 14px; line-height: 1.9; resize: vertical; background: #f8faff; color: #1a2a4a; direction: rtl; text-align: right; outline: none; }
+    .export-textarea:focus { border-color: #2a7de1; box-shadow: 0 0 0 3px rgba(42,125,225,0.15); background: white; }
+    .export-count { margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #1a2a4a; background: #e8f5e9; padding: 8px 14px; border-radius: 8px; display: inline-block; }
+
+    .prices-hint { font-size: 12px; color: #6a7e9e; background: #f0f4fa; padding: 8px 12px; border-radius: 8px; margin-top: 12px; line-height: 1.6; }
+
+    .guide-step { display: flex; gap: 12px; padding: 12px; background: #f8faff; border-radius: 8px; margin-bottom: 10px; border-right: 4px solid #2a7de1; }
+    .guide-step .num { background: #2a7de1; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+    .guide-step .txt { font-size: 14px; line-height: 1.7; color: #1a2a4a; }
+
+    .smart-result-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-radius: 8px; margin-bottom: 6px;
+      font-size: 13px; font-weight: 600;
+    }
+    .smart-result-item.ok   { background: #e8f5e9; color: #2e7d32; border-right: 3px solid #43a047; }
+    .smart-result-item.fail { background: #ffebee; color: #c62828; border-right: 3px solid #e53935; }
+    .smart-result-item.skip { background: #fff3e0; color: #e65100; border-right: 3px solid #fb8c00; }
+
+    @media (max-width: 700px) {
+      table { font-size: 10px; }
+      th, td { padding: 2px 2px; }
+      .modal-box { max-width: 95%; }
+      .columns-list { grid-template-columns: 1fr; }
+      .upload-area { gap: 6px; padding: 6px 8px; }
+      .icon-btn { width: 32px; height: 32px; font-size: 15px; }
+      .icon-btn.with-label { height: 30px; padding: 0 10px 0 8px; }
+      .icon-btn.with-label .btn-label { font-size: 11px; }
+      .file-chip { font-size: 10.5px; padding: 3px 8px; max-width: 120px; }
+    }
+    @media (max-width: 480px) {
+      .container { padding: 10px 8px; }
+      h1 { font-size: 16px; }
+      table { font-size: 9px; }
+      th, td { padding: 1px 1px; }
+      .copy-username-btn { font-size: 10px; padding: 1px 2px; }
+      .icon-btn { width: 30px; height: 30px; font-size: 14px; }
+      .icon-btn.with-label { height: 28px; padding: 0 8px 0 6px; }
+      .icon-btn.with-label .btn-icon { font-size: 11px; }
+      .icon-btn.with-label .btn-label { font-size: 10px; }
+    }
+  
+  .status-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 4px;}
+  .status-chip{border:1px solid #cdd6e4;background:#fff;border-radius:16px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit;color:#2b2d42;}
+  .status-chip.active{background:#2a7de1;color:#fff;border-color:#2a7de1;}
+  .status-last{font-size:12px;color:#667;margin-right:auto;}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="upload-area" id="uploadArea">
+    <button class="icon-btn green with-label" id="connectFolderBtn" type="button" title="ربط مجلد data">
+      <span class="btn-icon">🔗</span>
+      <span class="btn-label">ربط المجلد</span>
+    </button>
+
+    <button class="icon-btn blue with-label" id="smartUploadBtn" type="button" title="رفع ملف واحد أو عدة ملفات (سيتم اكتشاف النوع تلقائياً)">
+      <span class="btn-icon">📂</span>
+      <span class="btn-label">رفع ملفات</span>
+    </button>
+    <input type="file" id="smartFileInput" accept=".csv,.json,application/json,text/csv,text/plain" multiple class="hidden-file-input">
+
+    <button class="icon-btn save-btn green" id="saveAllBtn" type="button" title="حفظ فوري للكل (Ctrl+S)">
+      <span class="btn-icon">💾</span>
+    </button>
+
+    <button class="icon-btn orange" id="openColumnsBtn" type="button" title="اختيار الأعمدة المعروضة">👁️</button>
+    <button class="icon-btn red" id="exportNamesBtn" type="button" title="تصدير الأسماء">📤</button>
+
+    <span class="upload-divider"></span>
+
+    <span class="file-chip" id="chip-folder">📁 لم يُربط</span>
+    <span class="file-chip" id="chip-users">⏳ users.csv</span>
+    <span class="file-chip" id="chip-wifi">⏳ wifi.json</span>
+    <span class="file-chip" id="chip-prices">⏳ الأسعار</span>
+    <span class="file-chip fav" id="chip-favorites">⭐ المفضلة (0)</span>
+
+    <span class="save-status" id="saveStatus">💾 جاهز</span>
+
+    <button class="icon-btn gray small" id="reloadAutoBtn" type="button" title="إعادة جلب الملفات" style="margin-right:auto;">🔄</button>
+
+    <span class="hidden-el" id="fileName"></span>
+    <span class="hidden-el" id="uploadStatus"></span>
+    <span class="hidden-el" id="autoLoadMsg"></span>
+  </div>
+
+  <div class="search-section">
+    <div class="search-group" style="flex:1 1 100px; min-width:100px;">
+      <label>🔍 بحث عام</label>
+      <div class="search-input-wrap">
+        <input type="text" id="globalSearch" placeholder="ابحث...">
+        <button type="button" class="vk-toggle-btn" id="vkToggleBtn" title="كيبورد افتراضي">
+          <!-- ✅ أيقونة SVG مدمجة: تحميل فوري بدون شبكة -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+            <rect x="1.5" y="5.5" width="21" height="13" rx="2.5" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M5.5 9.5h.01M8.5 9.5h.01M11.5 9.5h.01M14.5 9.5h.01M17.5 9.5h.01M5.5 12.5h.01M17.5 12.5h.01M8.5 12.5h7M8.5 15.5h7"
+                  stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="search-group" style="flex:0 0 98px;">
+      <label>🏠 الحارة</label>
+      <input type="number" id="blockSearch">
+    </div>
+    <div class="search-group" style="flex:0 0 98px;">
+      <label>🏡 البيت</label>
+      <input type="number" id="houseSearch">
+    </div>
+    <div class="search-group" style="flex:0 0 130px;">
+      <label>📅 من</label>
+      <input type="date" id="dateFromSearch">
+    </div>
+    <div class="search-group" style="flex:0 0 130px;">
+      <label>📅 إلى</label>
+      <input type="date" id="dateToSearch">
+    </div>
+    <div class="search-group" style="flex:0 0 130px;">
+      <label>📅 تصفية سريعة</label>
+      <select id="quickDateFilter">
+        <option value="">— الكل —</option>
+        <option value="yesterday">⏮️ الأمس</option>
+        <option value="today">⏺️ اليوم</option>
+        <option value="tomorrow">⏭️ غداً</option>
+        <option value="favorites">⭐ المفضلة</option>
+      </select>
+    </div>
+    <div class="search-group" style="flex:0 0 42px;">
+      <button class="btn-reset" id="resetSearchBtn" type="button" title="إعادة ضبط" style="display:none;">↺</button>
+    </div>
+    <span class="results-count" id="resultsCount">عرض 0 من 0</span>
+  </div>
+
+  <div class="status-chips" id="statusChips"></div>
+    <div class="table-wrapper">
+    <table id="dataTable">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody">
+        <tr><td colspan="15" class="no-data">📄 جاري تحميل البيانات...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="modalTitle">📄 معلومات المشترك</h2>
+      <button class="modal-close" id="modalCloseBtn">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <button class="btn-copy" id="modalCopyBtn">📋 نسخ المعلومات</button>
+      <button class="btn-close-modal" id="modalCloseBtn2">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="columnsModalOverlay">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:520px;">
+    <div class="modal-header">
+      <h2>👁️ اختيار الأعمدة</h2>
+      <button class="modal-close" id="columnsCloseBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="columns-list" id="columnsList"></div>
+      <div class="prices-hint">💡 اختر الأعمدة التي تريد إظهارها. يتم الحفظ في متصفحك.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="columnsSelectAllBtn">✅ تحديد الكل</button>
+      <button class="btn-reset-default" id="columnsResetBtn">↺ استعادة الافتراضي</button>
+      <button class="btn-close-modal" id="columnsCloseBtn2">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="exportModalOverlay">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 620px;">
+    <div class="modal-header">
+      <h2>📤 تصدير الأسماء</h2>
+      <button class="modal-close" id="exportCloseBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="export-count" id="exportCount">إجمالي الأسماء: 0</div>
+      <div class="export-options">
+        <label class="export-sort-toggle">
+          <input type="checkbox" id="exportSortAlpha">
+          <span>🔤 ترتيب أبجدي</span>
+        </label>
+      </div>
+      <textarea id="exportTextArea" class="export-textarea" readonly placeholder="لا توجد أسماء..."></textarea>
+      <div class="prices-hint">
+        💡 القائمة من الصفوف الظاهرة حالياً. الصفوف بدون "الاسم الأول" أو "-" لا تُحتسب.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="exportCopyBtn">📋 نسخ الكل</button>
+      <button class="btn-purple" id="exportDownloadBtn">⬇️ تحميل TXT</button>
+      <button class="btn-close-modal" id="exportCloseBtn2">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="smartUploadModalOverlay">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 520px;">
+    <div class="modal-header">
+      <h2>📥 نتائج رفع الملفات</h2>
+      <button class="modal-close" id="smartUploadCloseBtn">✕</button>
+    </div>
+    <div class="modal-body" id="smartUploadBody"></div>
+    <div class="modal-footer">
+      <button class="btn-save" id="smartUploadOkBtn">تمام</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="guideModalOverlay">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 560px;">
+    <div class="modal-header">
+      <h2>🔗 كيفية ربط مجلد data</h2>
+      <button class="modal-close" id="guideCloseBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#e3f2fd; padding:12px; border-radius:8px; margin-bottom:14px; font-size:14px; color:#0d47a1;">
+        ✅ بعد الربط مرة واحدة، ستحتفظ الصفحة بالوصول للمجلد تلقائياً في المرات القادمة.
+      </div>
+
+      <div class="guide-step">
+        <div class="num">1</div>
+        <div class="txt">
+          ضع الملفات في مجلد واحد اسمه <strong>data</strong> بجانب الصفحة:
+          <pre style="background:#1f3a5f; color:#a5d6a7; padding:8px; border-radius:6px; direction:ltr; text-align:left; font-size:12px; margin-top:6px;">data/
+  ├── users.csv
+  ├── wifi.json
+  ├── favorites.json
+  └── Package-prices.json</pre>
+        </div>
+      </div>
+
+      <div class="guide-step">
+        <div class="num">2</div>
+        <div class="txt">انقر زر <strong>🔗 ربط المجلد</strong> في شريط الأدوات بالأعلى.</div>
+      </div>
+
+      <div class="guide-step">
+        <div class="num">3</div>
+        <div class="txt">
+          اختر مجلد <strong>data</strong> من نافذة الملفات.<br>
+          <span style="color:#e65100; font-weight:700;">⚠️ اختر المجلد نفسه وليس ملفاً داخله.</span>
+        </div>
+      </div>
+
+      <div class="guide-step">
+        <div class="num">4</div>
+        <div class="txt">
+          اضغط <strong>View files</strong> ثم <strong>Save changes</strong> في نافذة الصلاحيات.
+        </div>
+      </div>
+
+      <div class="guide-step">
+        <div class="num">📂</div>
+        <div class="txt">
+          <strong>رفع ذكي:</strong> انقر زر <strong>📂 رفع ملفات</strong> واختر ملفاً أو عدة ملفات.
+          <br>
+          سيُكتشف نوع كل ملف تلقائياً، ويُحفظ في المجلد (إن كان مربوطاً) باسمه القياسي.
+          <br>
+          <strong>💡 نصيحة:</strong> يمكنك أيضاً سحب الملفات وإفلاتها على شريط الأدوات.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-save" id="guideOkBtn">فهمت، ابدأ الربط</button>
+      <button class="btn-close-modal" id="guideCloseBtn2">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="virtual-keyboard" id="virtualKeyboard" role="dialog" aria-label="الكيبورد الافتراضي">
+  <div class="vk-header">
+    <span class="vk-title">⌨️ الكيبورد الافتراضي</span>
+    <div class="vk-lang-switch">
+      <button type="button" class="vk-lang-btn active" data-lang="ar">عربي</button>
+      <button type="button" class="vk-lang-btn" data-lang="en">EN</button>
+    </div>
+    <button type="button" class="vk-close-btn" id="vkCloseBtn" title="إغلاق">✕</button>
+  </div>
+  <div class="vk-body" id="vkBody"></div>
+</div>
+
+<div class="copy-toast" id="copyToast">✅ تم النسخ</div>
+
+<script>
+(function () {
+  'use strict';
+
+  console.log('🚀 Subscribers.html starting...');
+
+  const DB_NAME = 'SubscribersDatabase';
+  const DB_VERSION = 2;
+  const STORE_NAME = 'files';
+  const HANDLE_STORE = 'handles';
+  const DIR_HANDLE_KEY = 'dataDirHandle';
+
+  const FILE_KEY = 'users.csv';
+  const PRICES_KEY = 'prices.json';
+  const EXTRA_KEY = 'extraData.json';
+  const COLUMNS_KEY = 'columnsPref.json';
+  const FAVORITES_KEY = 'favorites.json';
+
+  const RADIUS_URL = 'http://192.168.192.192/radiusmanager/admin.php?cont=edit_user&username=';
+
+  const USERS_FILENAME = 'users.csv';
+  const WIFI_FILENAME = 'wifi.json';
+  const PRICES_FILENAME = 'Package-prices.json';
+  const FAVORITES_FILENAME = 'favorites.json';
+
+  const FLAG_US = '<img src="https://flagcdn.com/w20/us.png" class="flag-icon" alt="US" loading="lazy">';
+  const FLAG_TR = '<img src="https://flagcdn.com/w20/tr.png" class="flag-icon" alt="TR" loading="lazy">';
+  const FLAG_SY = '<img src="https://flagcdn.com/w20/sy.png" class="flag-icon" alt="SY" loading="lazy">';
+
+  const DISPLAY_COLUMNS = [
+    'Expiration','Full Name' , 'Service', 'User name',
+    'Price $', 'Price 🇹🇷', 'Price 🇸🇾', 'Address',
+    '🌐 IP', '📶 WiFi', '🔑 WiFi Pass', '🔐 Router Pass'
+  ];
+
+  const TOGGLEABLE_COLUMNS = [
+    ...DISPLAY_COLUMNS.map(c => ({ key: c, label: c === 'Full Name' ? '👤 Full Name' : c })),
+    { key: '_block', label: '🏠 حارة' },
+    { key: '_house', label: '🏡 بيت' }
+  ];
+
+  const SORT_KEY_MAP = {
+    'Price $': '_priceUSD', 'Price 🇹🇷': '_priceTL', 'Price 🇸🇾': '_priceSY',
+    'Service': '_speed',
+    '🌐 IP': '_extraIP', '📶 WiFi': '_extraWifi',
+    '🔑 WiFi Pass': '_extraWifiPass', '🔐 Router Pass': '_extraRouterPass'
+  };
+
+  const EXTRA_FIELD_MAP = {
+    '🌐 IP': 'ip', '📶 WiFi': 'wifi',
+    '🔑 WiFi Pass': 'wifiPass', '🔐 Router Pass': 'routerPass'
+  };
+
+  const DEFAULT_PRICE_MAP = {
+    '1M':  { usd: '5',  tl: '250',   sy: '700'   },
+    '2M':  { usd: '7',  tl: '350',   sy: '1,000' },
+    '3M':  { usd: '9',  tl: '450',   sy: '1,250' },
+    '5M':  { usd: '12', tl: '600',   sy: '1,700' },
+    '8M':  { usd: '15', tl: '750',   sy: '2,100' },
+    '10M': { usd: '18', tl: '900',   sy: '2,500' }
+  };
+
+  let PRICE_MAP = JSON.parse(JSON.stringify(DEFAULT_PRICE_MAP));
+  let extraData = {};
+  let favorites = {};
+
+  let visibleColumns = {};
+  TOGGLEABLE_COLUMNS.forEach(c => { visibleColumns[c.key] = true; });
+
+  const COLUMN_MAPPING = {
+    'اسم المستخدم': 'User name', 'الاسم الأول': 'First name',
+    'اسم العائلة': 'Last name', 'انتهاء': 'Expiration',
+    'بروفيل': 'Service', 'العنوان': 'Address', 'تعليق': 'Comment'
+  };
+
+  const ENGLISH_KEYS = ['User name', 'First name', 'Last name', 'Expiration', 'Service', 'Address', 'Comment'];
+
+  let allRows = [];
+  let filteredRows = [];
+  let currentSort = { column: null, ascending: true };
+  let defaultDateFromValue = '';
+  let defaultDateToValue   = '';
+
+  let dataDirHandle = null;
+  const fsSupported = 'showDirectoryPicker' in window;
+
+  let dirInfo = { name: '', files: [], scannedAt: null, totalSize: 0 };
+
+  let saveStatusTimeout = null;
+
+  let sourceInfo = {
+    users:  { status: 'none', source: 'manual' },
+    wifi:   { status: 'none', source: 'manual' },
+    favorites: { status: 'none', source: 'manual' },
+    prices: { status: 'none', source: 'manual' }
+  };
+
+  const saveAllBtn = document.getElementById('saveAllBtn');
+  const saveStatusEl = document.getElementById('saveStatus');
+
+  /* ===================================================================
+     ★★★ نظام الحفظ الذكي للـ wifi/extraData ★★★
+     =================================================================== */
+  const SmartSave = (function () {
+    const BROWSER_DEBOUNCE = 250;
+    const FILE_DEBOUNCE = 700;
+    const RETRY_DELAY = 2500;
+    const MAX_RETRIES = 3;
+
+    let seq = 0;
+    let browserTimer = null;
+    let fileTimer = null;
+    let activeJobs = 0;
+    let dirtySet = new Set();
+    let retries = 0;
+
+    function setStatus(cls, text) {
+      saveStatusEl.className = 'save-status ' + (cls || '');
+      saveStatusEl.textContent = text;
+    }
+
+    function updateSaveBtnState() {
+      const hasDirty = dirtySet.size > 0;
+      saveAllBtn.classList.toggle('pulse', hasDirty && activeJobs === 0);
+      if (hasDirty && activeJobs === 0) {
+        saveAllBtn.classList.remove('ok', 'err');
+      }
+    }
+
+    function markDirty(el) {
+      if (el && el.classList) {
+        el.classList.remove('saved', 'error');
+        el.classList.add('saving');
+        dirtySet.add(el);
+      }
+      updateSaveBtnState();
+    }
+
+    function markSaved(el) {
+      if (el && el.classList) {
+        el.classList.remove('saving', 'error', 'unsaved');
+        el.classList.add('saved');
+        setTimeout(() => {
+          if (el.isConnected) el.classList.remove('saved');
+        }, 1400);
+      }
+    }
+
+    function markError(el) {
+      if (el && el.classList) {
+        el.classList.remove('saving', 'saved', 'unsaved');
+        el.classList.add('error');
+        setTimeout(() => {
+          if (el.isConnected) el.classList.remove('error');
+        }, 2500);
+      }
+    }
+
+    async function saveToBrowser() {
+      try {
+        await saveExtraDataToBrowser(extraData);
+        return { ok: true, target: 'browser' };
+      } catch (e) {
+        console.error('❌ Browser save failed:', e);
+        return { ok: false, target: 'browser', error: e };
+      }
+    }
+
+    async function saveToFile() {
+      if (!dataDirHandle) return { ok: true, target: 'file', skipped: true };
+      try {
+        const granted = await verifyPermission(dataDirHandle, true);
+        if (!granted) throw new Error('لا توجد صلاحية للكتابة');
+        const jsonText = JSON.stringify(extraData, null, 2);
+        await writeFileToDir(dataDirHandle, WIFI_FILENAME, jsonText);
+        return { ok: true, target: 'file' };
+      } catch (e) {
+        console.error('❌ File save failed:', e);
+        return { ok: false, target: 'file', error: e };
+      }
+    }
+
+    async function performSave(opts) {
+      const mySeq = ++seq;
+      activeJobs++;
+      setStatus('saving', dataDirHandle ? '💾 حفظ (متصفح + ملف)...' : '💾 حفظ (متصفح)...');
+      saveAllBtn.classList.remove('pulse', 'ok', 'err');
+      saveAllBtn.classList.add('busy');
+      saveAllBtn.querySelector('.btn-icon').textContent = '⏳';
+
+      const cells = Array.from(dirtySet);
+      const results = await Promise.all([saveToBrowser(), saveToFile()]);
+      activeJobs--;
+
+      if (mySeq !== seq) return results;
+
+      const browserOk = results[0].ok;
+      const fileOk    = results[1].ok;
+
+      if (browserOk && fileOk) {
+        retries = 0;
+        const count = Object.keys(extraData).length;
+        setStatus('saved', dataDirHandle
+          ? `✅ محفوظ في المتصفح والملف (${count})`
+          : `✅ محفوظ في المتصفح (${count})`);
+        cells.forEach(markSaved);
+        dirtySet.clear();
+        saveAllBtn.classList.remove('busy', 'pulse', 'err');
+        saveAllBtn.classList.add('ok');
+        saveAllBtn.querySelector('.btn-icon').textContent = '✅';
+
+        if (saveStatusTimeout) clearTimeout(saveStatusTimeout);
+        saveStatusTimeout = setTimeout(() => {
+          if (mySeq === seq) {
+            setStatus('', '💾 جاهز');
+            saveAllBtn.classList.remove('ok');
+            saveAllBtn.querySelector('.btn-icon').textContent = '💾';
+          }
+        }, 2500);
+        return results;
+      }
+
+      if (browserOk || fileOk) {
+        setStatus('dirty', browserOk ? '⚠️ محفوظ في المتصفح فقط' : '⚠️ محفوظ في الملف فقط');
+        if (browserOk) cells.forEach(markSaved);
+        saveAllBtn.classList.remove('busy');
+        saveAllBtn.classList.add('err');
+        saveAllBtn.querySelector('.btn-icon').textContent = '⚠️';
+        scheduleRetry();
+        return results;
+      }
+
+      setStatus('error', '❌ فشل الحفظ - سيُعاد المحاولة');
+      cells.forEach(markError);
+      saveAllBtn.classList.remove('busy', 'pulse', 'ok');
+      saveAllBtn.classList.add('err');
+      saveAllBtn.querySelector('.btn-icon').textContent = '❌';
+      scheduleRetry();
+      return results;
+    }
+
+    function scheduleRetry() {
+      if (retries >= MAX_RETRIES) {
+        setStatus('error', '❌ فشل الحفظ بعد عدة محاولات');
+        return;
+      }
+      retries++;
+      setTimeout(() => {
+        if (dirtySet.size > 0 || activeJobs === 0) {
+          console.log(`🔁 إعادة محاولة الحفظ (${retries}/${MAX_RETRIES})...`);
+          performSave({ reason: 'retry' });
+        }
+      }, RETRY_DELAY);
+    }
+
+    function scheduleBrowser() {
+      if (browserTimer) clearTimeout(browserTimer);
+      browserTimer = setTimeout(() => {
+        browserTimer = null;
+        performSave({ reason: 'browser-debounce' });
+      }, BROWSER_DEBOUNCE);
+    }
+
+    function scheduleFile() {
+      if (!dataDirHandle) return;
+      if (fileTimer) clearTimeout(fileTimer);
+      fileTimer = setTimeout(() => {
+        fileTimer = null;
+        performSave({ reason: 'file-debounce' });
+      }, FILE_DEBOUNCE);
+    }
+
+    return {
+      onEdit(inputEl) {
+        markDirty(inputEl);
+        scheduleBrowser();
+        scheduleFile();
+        updateSaveBtnState();
+      },
+      saveNow() {
+        if (browserTimer) { clearTimeout(browserTimer); browserTimer = null; }
+        if (fileTimer)    { clearTimeout(fileTimer);    fileTimer = null; }
+        return performSave({ reason: 'manual' });
+      },
+      pendingCount() { return dirtySet.size; },
+      clearCell(el) {
+        if (el) dirtySet.delete(el);
+      }
+    };
+  })();
+
+
+  /* ===================================================================
+     ★★★ نظام حفظ المفضلة الذكي (FavoritesSave) ★★★
+     =================================================================== */
+  const FavoritesSave = (function () {
+    const BROWSER_DELAY = 100;
+    const FILE_DELAY = 400;
+    const RETRY_DELAY = 2000;
+    const MAX_RETRIES = 3;
+
+    let browserTimer = null;
+    let fileTimer = null;
+    let isSaving = false;
+    let pendingSave = false;
+    let retries = 0;
+
+    async function saveToBrowser() {
+      try {
+        await saveFavoritesToBrowser(favorites);
+        return { ok: true };
+      } catch (e) {
+        console.error('❌ حفظ المفضلة في المتصفح فشل:', e);
+        return { ok: false, error: e };
+      }
+    }
+
+    async function saveToFile() {
+      if (!dataDirHandle) return { ok: true, skipped: true };
+      try {
+        const granted = await verifyPermission(dataDirHandle, true);
+        if (!granted) throw new Error('صلاحية الكتابة مرفوضة - انقر 🔓 استئناف');
+        const jsonText = JSON.stringify(favorites, null, 2);
+        await writeFileToDir(dataDirHandle, FAVORITES_FILENAME, jsonText);
+        return { ok: true };
+      } catch (e) {
+        console.error('❌ حفظ favorites.json فشل:', e);
+        return { ok: false, error: e };
+      }
+    }
+
+    async function performSave(silent) {
+      if (isSaving) { pendingSave = true; return; }
+      isSaving = true;
+
+      const count = Object.keys(favorites).length;
+      if (!silent) setSaveStatus('saving', `⭐ حفظ المفضلة (${count})...`);
+
+      const [browserRes, fileRes] = await Promise.all([saveToBrowser(), saveToFile()]);
+
+      isSaving = false;
+
+      if (browserRes.ok && fileRes.ok) {
+        retries = 0;
+        const msg = fileRes.skipped
+          ? `⭐ محفوظ في المتصفح (${count})`
+          : `⭐ محفوظ في الملف (${count})`;
+        setSaveStatus('saved', msg);
+        if (!silent) showToast(`⭐ تم حفظ ${count} مفضل`, 'gold');
+
+        if (saveStatusTimeout) clearTimeout(saveStatusTimeout);
+        saveStatusTimeout = setTimeout(() => setSaveStatus('', '💾 جاهز'), 2500);
+      } else {
+        const errMsg = (fileRes.error && fileRes.error.message) || 'خطأ غير معروف';
+        setSaveStatus('error', '❌ فشل حفظ المفضلة');
+        console.error('Favorites save error:', errMsg);
+
+        if (retries < MAX_RETRIES) {
+          retries++;
+          console.log(`🔁 إعادة محاولة المفضلة (${retries}/${MAX_RETRIES})...`);
+          setTimeout(() => performSave(true), RETRY_DELAY);
+        } else {
+          if (!silent) showToast('❌ فشل حفظ المفضلة: ' + errMsg, 'error');
+          retries = 0;
+        }
+      }
+
+      if (pendingSave) {
+        pendingSave = false;
+        setTimeout(() => performSave(silent), 100);
+      }
+    }
+
+    return {
+      onEdit() {
+        if (browserTimer) clearTimeout(browserTimer);
+        browserTimer = setTimeout(() => {
+          browserTimer = null;
+          saveToBrowser().catch(() => {});
+        }, BROWSER_DELAY);
+
+        if (fileTimer) clearTimeout(fileTimer);
+        fileTimer = setTimeout(() => {
+          fileTimer = null;
+          performSave(true);
+        }, FILE_DELAY);
+      },
+      saveNow(silent) {
+        if (browserTimer) { clearTimeout(browserTimer); browserTimer = null; }
+        if (fileTimer) { clearTimeout(fileTimer); fileTimer = null; }
+        return performSave(silent);
+      },
+      pendingCount() { return pendingSave ? 1 : 0; }
+    };
+  })();
+
+
+  /* ========== عناصر الصفحة ========== */
+  const uploadArea = document.getElementById('uploadArea');
+  const connectFolderBtn = document.getElementById('connectFolderBtn');
+  const smartUploadBtn = document.getElementById('smartUploadBtn');
+  const smartFileInput = document.getElementById('smartFileInput');
+  const fileName = document.getElementById('fileName');
+  const uploadStatus = document.getElementById('uploadStatus');
+  const autoLoadMsg = document.getElementById('autoLoadMsg');
+  const tableHead = document.getElementById('tableHead');
+  const tableBody = document.getElementById('tableBody');
+  const globalSearch = document.getElementById('globalSearch');
+  const blockSearch = document.getElementById('blockSearch');
+  const houseSearch = document.getElementById('houseSearch');
+  const dateFromSearch = document.getElementById('dateFromSearch');
+  const dateToSearch = document.getElementById('dateToSearch');
+  const quickDateFilter = document.getElementById('quickDateFilter');
+  const resetBtn = document.getElementById('resetSearchBtn');
+  const exportNamesBtn = document.getElementById('exportNamesBtn');
+  const resultsCount = document.getElementById('resultsCount');
+
+  const chipFolder = document.getElementById('chip-folder');
+  const chipUsers = document.getElementById('chip-users');
+  const chipWifi = document.getElementById('chip-wifi');
+  const chipPrices = document.getElementById('chip-prices');
+  const chipFavorites = document.getElementById('chip-favorites');
+  const saveStatus = document.getElementById('saveStatus');
+  const reloadAutoBtn = document.getElementById('reloadAutoBtn');
+
+  const modalOverlay = document.getElementById('modalOverlay');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalBody = document.getElementById('modalBody');
+  const modalCloseBtn = document.getElementById('modalCloseBtn');
+  const modalCloseBtn2 = document.getElementById('modalCloseBtn2');
+  const modalCopyBtn = document.getElementById('modalCopyBtn');
+  const copyToast = document.getElementById('copyToast');
+
+  const openColumnsBtn = document.getElementById('openColumnsBtn');
+  const columnsModalOverlay = document.getElementById('columnsModalOverlay');
+  const columnsList = document.getElementById('columnsList');
+  const columnsCloseBtn = document.getElementById('columnsCloseBtn');
+  const columnsCloseBtn2 = document.getElementById('columnsCloseBtn2');
+  const columnsSelectAllBtn = document.getElementById('columnsSelectAllBtn');
+  const columnsResetBtn = document.getElementById('columnsResetBtn');
+
+  const exportModalOverlay = document.getElementById('exportModalOverlay');
+  const exportTextArea = document.getElementById('exportTextArea');
+  const exportCount = document.getElementById('exportCount');
+  const exportCopyBtn = document.getElementById('exportCopyBtn');
+  const exportDownloadBtn = document.getElementById('exportDownloadBtn');
+  const exportCloseBtn = document.getElementById('exportCloseBtn');
+  const exportCloseBtn2 = document.getElementById('exportCloseBtn2');
+  const exportSortAlpha = document.getElementById('exportSortAlpha');
+
+  const guideModalOverlay = document.getElementById('guideModalOverlay');
+  const guideCloseBtn = document.getElementById('guideCloseBtn');
+  const guideCloseBtn2 = document.getElementById('guideCloseBtn2');
+  const guideOkBtn = document.getElementById('guideOkBtn');
+
+  const smartUploadModalOverlay = document.getElementById('smartUploadModalOverlay');
+  const smartUploadBody = document.getElementById('smartUploadBody');
+  const smartUploadCloseBtn = document.getElementById('smartUploadCloseBtn');
+  const smartUploadOkBtn = document.getElementById('smartUploadOkBtn');
+
+
+  /* ========== أدوات ========== */
+  function debounce(fn, delay) {
+    let t;
+    return function (...a) { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), delay); };
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function setConnectBtn(icon, label, title) {
+    connectFolderBtn.innerHTML =
+      '<span class="btn-icon">' + icon + '</span>' +
+      '<span class="btn-label">' + label + '</span>';
+    connectFolderBtn.title = title || '';
+  }
+
+  function setUploadBtnLoading(loading) {
+    if (loading) {
+      smartUploadBtn.classList.add('loading');
+      smartUploadBtn.querySelector('.btn-icon').textContent = '⏳';
+      smartUploadBtn.querySelector('.btn-label').textContent = 'جاري...';
+      smartUploadBtn.disabled = true;
+    } else {
+      smartUploadBtn.classList.remove('loading');
+      smartUploadBtn.querySelector('.btn-icon').textContent = '📂';
+      smartUploadBtn.querySelector('.btn-label').textContent = 'رفع ملفات';
+      smartUploadBtn.disabled = false;
+    }
+  }
+
+  function fallbackCopy(text, msg) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showToast(msg || '✅ تم النسخ'); }
+    catch (e) { showToast('⚠️ تعذر النسخ', 'error'); }
+    document.body.removeChild(ta);
+  }
+
+  function copyToClipboard(text, msg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => showToast(msg || '✅ تم النسخ')).catch(() => fallbackCopy(text, msg));
+    } else { fallbackCopy(text, msg); }
+  }
+
+  function showToast(msg, type) {
+    copyToast.textContent = msg || '✅ تم النسخ';
+    copyToast.className = 'copy-toast ' + (type || '');
+    copyToast.classList.add('show');
+    setTimeout(() => copyToast.classList.remove('show'), 2500);
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    let size = bytes;
+    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+    return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+  }
+
+  function formatDate(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
+  }
+
+  function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = e => reject(new Error('FileReader error: ' + (e.target && e.target.error ? e.target.error.message : 'unknown')));
+      reader.onabort = () => reject(new Error('قراءة الملف تم إلغاؤها'));
+      try { reader.readAsText(file, 'UTF-8'); } catch (err) { reject(err); }
+    });
+  }
+
+
+  /* ========== اكتشاف نوع الملف ========== */
+  function normalizeFilename(name) {
+    return String(name || '')
+      .toLowerCase()
+      .replace(/\s*\(\d+\)\s*/g, '')
+      .replace(/\s*-\s*copy\s*/gi, '')
+      .replace(/\s*نسخة\s*(\d*)\s*/g, '')
+      .replace(/\s*-\s*\d+\s*$/g, '')
+      .trim();
+  }
+
+  function detectFileType(filename, content) {
+    const rawLower = String(filename || '').toLowerCase().trim();
+    const lower = normalizeFilename(filename);
+
+    if (lower === 'users.csv' || lower === 'user.csv' || lower === 'users' || lower === 'subscribers.csv') return 'users';
+    if (lower === 'wifi.json') return 'wifi';
+    if (lower === 'favorites.json' || lower === 'favourite.json' || lower === 'favourites.json' ||
+        lower === 'favorite.json' || lower === 'fav.json') return 'favorites';
+    if (lower === 'package-prices.json' || lower === 'package_prices.json' ||
+        lower === 'packageprices.json' || lower === 'prices.json' ||
+        lower === 'package-price.json' || lower === 'packages.json') return 'prices';
+
+    if (lower.endsWith('.csv')) {
+      if (lower.includes('user') || lower.includes('subscriber') || lower.includes('مشترك')) return 'users';
+      return 'users';
+    }
+
+    if (lower.endsWith('.json')) {
+      if (lower.includes('wifi')) return 'wifi';
+      if (lower.includes('fav')) return 'favorites';
+      if (lower.includes('price') || lower.includes('package') || lower.includes('tarif') || lower.includes('سعر') || lower.includes('باقة')) return 'prices';
+    }
+
+    if (lower.endsWith('.json') && content) {
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.packages)) return 'prices';
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const first = parsed[0];
+          if (first && typeof first === 'object' && 'mb' in first) return 'prices';
+        }
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const keys = Object.keys(parsed);
+          if (keys.length === 0) return null;
+          const allBool = keys.every(k => typeof parsed[k] === 'boolean');
+          if (allBool) return 'favorites';
+          const allObj = keys.every(k => parsed[k] && typeof parsed[k] === 'object' && !Array.isArray(parsed[k]));
+          if (allObj) {
+            let hasWifiFields = false;
+            for (const k of keys) {
+              const obj = parsed[k];
+              if (obj && ('ip' in obj || 'wifi' in obj || 'wifiPass' in obj || 'routerPass' in obj)) { hasWifiFields = true; break; }
+            }
+            return hasWifiFields ? 'wifi' : 'wifi';
+          }
+          return 'wifi';
+        }
+      } catch (e) { /* ليس JSON */ }
+    }
+    return null;
+  }
+
+  function getCanonicalFilename(type) {
+    if (type === 'users') return USERS_FILENAME;
+    if (type === 'wifi') return WIFI_FILENAME;
+    if (type === 'favorites') return FAVORITES_FILENAME;
+    if (type === 'prices') return PRICES_FILENAME;
+    return null;
+  }
+
+  function getTypeLabel(type) {
+    if (type === 'users') return '📄 المشتركين (users.csv)';
+    if (type === 'wifi') return '📶 معلومات الواي فاي (wifi.json)';
+    if (type === 'favorites') return '⭐ المفضلة (favorites.json)';
+    if (type === 'prices') return '💰 أسعار الباقات (Package-prices.json)';
+    return '❓ غير معروف';
+  }
+
+
+  /* ========== IndexedDB ========== */
+  function openDatabase() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+        if (!db.objectStoreNames.contains(HANDLE_STORE)) db.createObjectStore(HANDLE_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function saveToBrowser(key, value, storeName) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName || STORE_NAME, 'readwrite');
+      tx.objectStore(storeName || STORE_NAME).put(value, key);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+
+  async function loadFromBrowser(key, storeName) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName || STORE_NAME, 'readonly');
+      const req = tx.objectStore(storeName || STORE_NAME).get(key);
+      req.onsuccess = () => { db.close(); resolve(req.result || null); };
+      req.onerror = () => { db.close(); reject(req.error); };
+    });
+  }
+
+  async function saveCSVToBrowser(csvText) { return saveToBrowser(FILE_KEY, { text: csvText, savedAt: new Date().toISOString() }); }
+  async function loadCSVFromBrowser() { return loadFromBrowser(FILE_KEY); }
+  async function savePricesToBrowser(p) { return saveToBrowser(PRICES_KEY, p); }
+  async function loadPricesFromBrowser() { return loadFromBrowser(PRICES_KEY); }
+  async function saveExtraDataToBrowser(d) { return saveToBrowser(EXTRA_KEY, d); }
+  async function loadExtraDataFromBrowser() { return loadFromBrowser(EXTRA_KEY); }
+  async function saveColumnsToBrowser(c) { return saveToBrowser(COLUMNS_KEY, c); }
+  async function loadColumnsFromBrowser() { return loadFromBrowser(COLUMNS_KEY); }
+  async function saveDirHandleToBrowser(h) { return saveToBrowser(DIR_HANDLE_KEY, h, HANDLE_STORE); }
+  async function loadDirHandleFromBrowser() { return loadFromBrowser(DIR_HANDLE_KEY, HANDLE_STORE); }
+  async function saveFavoritesToBrowser(f) { return saveToBrowser(FAVORITES_KEY, f); }
+  async function loadFavoritesFromBrowser() { return loadFromBrowser(FAVORITES_KEY); }
+
+
+  /* ========== File System Access ========== */
+  async function verifyPermission(handle, readWrite) {
+    const opts = { mode: readWrite ? 'readwrite' : 'read' };
+    if ((await handle.queryPermission(opts)) === 'granted') return true;
+    if ((await handle.requestPermission(opts)) === 'granted') return true;
+    return false;
+  }
+
+  async function readFileFromDir(dirHandle, filename, asText) {
+    const fh = await dirHandle.getFileHandle(filename);
+    const file = await fh.getFile();
+    if (asText) return await file.text();
+    return JSON.parse(await file.text());
+  }
+
+  async function writeFileToDir(dirHandle, filename, data) {
+    const fh = await dirHandle.getFileHandle(filename, { create: true });
+    const writable = await fh.createWritable();
+    await writable.write(data);
+    await writable.close();
+  }
+
+  async function pickDirectory() {
+    if (!fsSupported) { showToast('❌ متصفحك لا يدعم File System Access API', 'error'); return null; }
+    try {
+      const handle = await window.showDirectoryPicker({ id: 'dataFolder', mode: 'readwrite', startIn: 'documents' });
+      const granted = await verifyPermission(handle, true);
+      if (!granted) { showToast('⚠️ لم يتم منح صلاحية الوصول', 'error'); return null; }
+      dataDirHandle = handle;
+      await saveDirHandleToBrowser(handle);
+      return handle;
+    } catch (e) {
+      if (e.name === 'AbortError') return null;
+      console.error(e);
+      showToast('❌ فشل اختيار المجلد: ' + e.message, 'error');
+      return null;
+    }
+  }
+
+  async function tryRestoreDirectory() {
+    if (!fsSupported) return null;
+    try {
+      const handle = await loadDirHandleFromBrowser();
+      if (!handle) return null;
+      dataDirHandle = handle;
+      return handle;
+    } catch (e) { console.warn('restore dir handle failed', e); return null; }
+  }
+
+
+  /* ========== فحص محتويات المجلد ========== */
+  async function scanDirContents(dirHandle) {
+    if (!dirHandle) return null;
+    const files = [];
+    let totalSize = 0;
+    try {
+      for await (const entry of dirHandle.values()) {
+        if (entry.kind === 'file') {
+          try {
+            const file = await entry.getFile();
+            files.push({ name: entry.name, size: file.size, lastModified: file.lastModified });
+            totalSize += file.size;
+          } catch (err) {
+            files.push({ name: entry.name, size: 0, lastModified: 0 });
+          }
+        }
+      }
+      files.sort((a, b) => a.name.localeCompare(b.name));
+      dirInfo = { name: dirHandle.name || 'data', files: files, scannedAt: new Date(), totalSize: totalSize };
+      return dirInfo;
+    } catch (e) { console.error('فشل فحص المجلد:', e); return null; }
+  }
+
+
+  /* ========== حالة الشرائح ========== */
+  function setChip(el, state, text) {
+    el.className = 'file-chip ' + (state || '') + (el.id === 'chip-favorites' ? ' fav' : '');
+    el.textContent = text;
+    updateChipTitles();
+  }
+
+  function setSaveStatus(state, text) {
+    saveStatus.className = 'save-status ' + (state || '');
+    saveStatus.textContent = text;
+  }
+
+  function updateFavoritesChip() {
+    const count = Object.keys(favorites).length;
+    chipFavorites.className = 'file-chip fav';
+    chipFavorites.textContent = `⭐ المفضلة (${count})`;
+    updateChipTitles();
+  }
+
+
+  /* ========== تحديث تلميحات الشرائح ========== */
+  function updateChipTitles() {
+    const folderName = dataDirHandle ? (dataDirHandle.name || 'data') : '';
+    const hasFolder = !!folderName;
+
+    if (hasFolder) {
+      let filesList = '';
+      if (dirInfo.files && dirInfo.files.length > 0) {
+        filesList = dirInfo.files.map(f => {
+          const sizeStr = formatBytes(f.size);
+          const dateStr = formatDate(f.lastModified);
+          return `  • ${f.name}  (${sizeStr} — ${dateStr})`;
+        }).join('\n');
+      } else { filesList = '  (لا توجد ملفات أو لم يتم الفحص بعد)'; }
+
+      const totalSizeStr = formatBytes(dirInfo.totalSize);
+      const scanTime = dirInfo.scannedAt ? dirInfo.scannedAt.toLocaleTimeString('ar-EG') : '—';
+
+      chipFolder.title =
+        `📁 مجلد البيانات المربوط\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `الاسم: ${folderName}\n` +
+        `عدد الملفات: ${dirInfo.files.length}\n` +
+        `الحجم الكلي: ${totalSizeStr}\n` +
+        `آخر فحص: ${scanTime}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📄 الملفات داخل المجلد:\n` +
+        `${filesList}\n\n` +
+        `💡 ملاحظة: المتصفح لا يسمح بعرض المسار\n` +
+        `   الكامل (مثل C:\\Users\\...) لأسباب أمنية.`;
+    } else {
+      chipFolder.title = `📁 لا يوجد مجلد مربوط\n━━━━━━━━━━━━━━━━━━━━\nانقر زر "🔗 ربط المجلد" لاختيار مجلد data من جهازك`;
+    }
+
+    chipUsers.title = `📄 ملف المشتركين\n━━━━━━━━━━━━━━━━━━━━\nاسم الملف: ${USERS_FILENAME}\nالمصدر: ${getSourceLabel(sourceInfo.users.source, folderName)}\nعدد السجلات: ${allRows.length.toLocaleString('en-US')}`;
+
+    const wifiCount = Object.keys(extraData).length;
+    chipWifi.title = `📶 ملف معلومات الواي فاي\n━━━━━━━━━━━━━━━━━━━━\nاسم الملف: ${WIFI_FILENAME}\nالمصدر: ${getSourceLabel(sourceInfo.wifi.source, folderName)}\nعدد المشتركين: ${wifiCount.toLocaleString('en-US')}`;
+
+    const priceCount = Object.keys(PRICE_MAP).length;
+    chipPrices.title = `💰 ملف أسعار الباقات\n━━━━━━━━━━━━━━━━━━━━\nاسم الملف: ${PRICES_FILENAME}\nالمصدر: ${getSourceLabel(sourceInfo.prices.source, folderName)}\nعدد الباقات: ${priceCount}`;
+
+    const favCount = Object.keys(favorites).length;
+    chipFavorites.title = `⭐ ملف المفضلة\n━━━━━━━━━━━━━━━━━━━━\nاسم الملف: ${FAVORITES_FILENAME}\nالمصدر: ${getSourceLabel(sourceInfo.favorites.source, folderName)}\nعدد المفضلين: ${favCount.toLocaleString('en-US')}\n\n💡 انقر ☆ بجانب أي اسم لإضافته`;
+  }
+
+  function getSourceLabel(source, folderName) {
+    if (source === 'folder' && folderName) return `📁 مجلد ${folderName}`;
+    if (source === 'manual') return '📂 رفع يدوي';
+    if (source === 'db')     return '💾 ذاكرة المتصفح';
+    return '❌ غير محمّل';
+  }
+
+
+  /* ========== جلب الملفات من المجلد ========== */
+  async function loadAllFromDirectory(dirHandle) {
+    if (!dirHandle) return { usersOk: false, wifiOk: false, pricesOk: false, favoritesOk: false };
+
+    const granted = await verifyPermission(dirHandle, true);
+    if (!granted) {
+      setChip(chipFolder, 'fail', '❌ صلاحية مرفوضة');
+      return { usersOk: false, wifiOk: false, pricesOk: false, favoritesOk: false };
+    }
+
+    let usersOk = false, wifiOk = false, pricesOk = false, favoritesOk = false;
+    setChip(chipFolder, 'folder', '📁 ' + (dirHandle.name || 'data'));
+
+    setChip(chipPrices, 'loading', '⏳ الأسعار...');
+    try {
+      const data = await readFileFromDir(dirHandle, PRICES_FILENAME, false);
+      if (applyPricesFromParsedJSON(data)) {
+        await savePricesToBrowser(PRICE_MAP);
+        pricesOk = true;
+        sourceInfo.prices = { status: 'ok', source: 'folder' };
+        setChip(chipPrices, 'ok', `✅ الأسعار (${countAppliedPackages(data)})`);
+      } else {
+        sourceInfo.prices = { status: 'fail', source: 'folder' };
+        setChip(chipPrices, 'fail', '❌ صيغة الأسعار');
+      }
+    } catch (e) {
+      sourceInfo.prices = { status: 'fail', source: 'folder' };
+      setChip(chipPrices, 'fail', '❌ لم يُعثر على الأسعار');
+    }
+
+    setChip(chipWifi, 'loading', '⏳ wifi.json');
+    try {
+      const data = await readFileFromDir(dirHandle, WIFI_FILENAME, false);
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        Object.keys(data).forEach(username => {
+          if (!extraData[username]) extraData[username] = {};
+          const src = data[username] || {};
+          ['ip', 'wifi', 'wifiPass', 'routerPass'].forEach(f => {
+            if (src[f] !== undefined && src[f] !== null) extraData[username][f] = src[f];
+          });
+        });
+        await saveExtraDataToBrowser(extraData);
+        wifiOk = true;
+        sourceInfo.wifi = { status: 'ok', source: 'folder' };
+        setChip(chipWifi, 'ok', `✅ WiFi (${Object.keys(data).length})`);
+      } else {
+        sourceInfo.wifi = { status: 'fail', source: 'folder' };
+        setChip(chipWifi, 'fail', '❌ صيغة wifi');
+      }
+    } catch (e) {
+      try {
+        await writeFileToDir(dirHandle, WIFI_FILENAME, '{}');
+        sourceInfo.wifi = { status: 'ok', source: 'folder' };
+        setChip(chipWifi, 'ok', '✅ WiFi (ملف جديد)');
+        wifiOk = true;
+      } catch (err) {
+        sourceInfo.wifi = { status: 'fail', source: 'folder' };
+        setChip(chipWifi, 'fail', '❌ فشل قراءة wifi');
+      }
+    }
+
+    setChip(chipFavorites, 'loading', '⏳ المفضلة');
+    try {
+      const data = await readFileFromDir(dirHandle, FAVORITES_FILENAME, false);
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        favorites = data;
+        await saveFavoritesToBrowser(favorites);
+        favoritesOk = true;
+        sourceInfo.favorites = { status: 'ok', source: 'folder' };
+        updateFavoritesChip();
+      } else {
+        sourceInfo.favorites = { status: 'fail', source: 'folder' };
+        setChip(chipFavorites, 'fail', '❌ صيغة المفضلة');
+      }
+    } catch (e) {
+      try {
+        favorites = {};
+        await writeFileToDir(dirHandle, FAVORITES_FILENAME, '{}');
+        await saveFavoritesToBrowser(favorites);
+        sourceInfo.favorites = { status: 'ok', source: 'folder' };
+        setChip(chipFavorites, 'fav', '⭐ المفضلة (ملف جديد)');
+        favoritesOk = true;
+      } catch (err) {
+        sourceInfo.favorites = { status: 'fail', source: 'folder' };
+        setChip(chipFavorites, 'fail', '❌ فشل قراءة المفضلة');
+      }
+    }
+
+    setChip(chipUsers, 'loading', '⏳ users.csv');
+    try {
+      const text = await readFileFromDir(dirHandle, USERS_FILENAME, true);
+      loadDataFromCSVText(text, 'users.csv (من المجلد)');
+      await saveCSVToBrowser(text);
+      usersOk = true;
+      sourceInfo.users = { status: 'ok', source: 'folder' };
+      setChip(chipUsers, 'ok', `✅ users.csv (${allRows.length})`);
+    } catch (e) {
+      sourceInfo.users = { status: 'fail', source: 'folder' };
+      setChip(chipUsers, 'fail', '❌ لم يُعثر على users.csv');
+    }
+
+    if (pricesOk && allRows.length > 0) {
+      reapplyPrices();
+      applyFiltersAndSort();
+    }
+
+    return { usersOk, wifiOk, pricesOk, favoritesOk };
+  }
+
+
+  /* ========== دوال التواريخ ========== */
+  function parseDateParts(dateStr) {
+    if (!dateStr) return null;
+    const clean = String(dateStr).trim().replace(/[\/\.]/g, '-');
+    const dateOnly = clean.split(' ')[0];
+    const parts = dateOnly.split('-').filter(p => p !== '');
+    if (parts.length !== 3) return null;
+    let year, month, day;
+    if (parts[0].length === 4) {
+      year = parseInt(parts[0], 10); month = parseInt(parts[1], 10) - 1; day = parseInt(parts[2], 10);
+    } else if (parts[2].length === 4) {
+      day = parseInt(parts[0], 10); month = parseInt(parts[1], 10) - 1; year = parseInt(parts[2], 10);
+    } else return null;
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+    return { year, month, day };
+  }
+
+  function getDateStatus(d) {
+    const p = parseDateParts(d);
+    if (!p) return 'unknown';
+    const date = new Date(p.year, p.month, p.day);
+    const today = new Date(); today.setHours(0, 0, 0, 0); date.setHours(0, 0, 0, 0);
+    if (date < today) return 'past';
+    if (date.getTime() === today.getTime()) return 'today';
+    return 'future';
+  }
+
+  function getDateValue(d) {
+    const p = parseDateParts(d);
+    if (!p) return 0;
+    return new Date(p.year, p.month, p.day).getTime();
+  }
+
+  function getExpirationEmoji(d) {
+    const s = getDateStatus(d);
+    if (s === 'past') return '🔴';
+    if (s === 'today') return '🟠';
+    if (s === 'future') return '🟢';
+    return '';
+  }
+
+  function setDateRangeFromData() {
+    let minT = Infinity, maxT = -Infinity;
+    allRows.forEach(row => {
+      const t = getDateValue(row.Expiration || '');
+      if (t > 0) { if (t < minT) minT = t; if (t > maxT) maxT = t; }
+    });
+    const pad = n => String(n).padStart(2, '0');
+    const toStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    dateFromSearch.value = (minT !== Infinity) ? toStr(new Date(minT)) : toStr(new Date());
+    dateToSearch.value   = (maxT !== -Infinity) ? toStr(new Date(maxT)) : toStr(new Date());
+    defaultDateFromValue = dateFromSearch.value;
+    defaultDateToValue   = dateToSearch.value;
+  }
+
+
+  /* ========== الاسم ========== */
+  function getFullName(row) {
+    const first = (row['First name'] || '').trim();
+    const last  = (row['Last name'] || '').trim();
+    if (!first && !last) return '—';
+    if (!first) return last;
+    if (!last)  return first;
+    if (first.endsWith(last)) return first;
+    if (first.includes(last)) return first;
+    if (last.includes(first)) return last;
+    return first + ' ' + last;
+  }
+
+  function isValidName(row) {
+    const first = (row['First name'] || '').trim();
+    if (!first || first === '-' || first === '—') return false;
+    const fn = getFullName(row);
+    return fn && fn !== '-' && fn !== '—';
+  }
+
+  function normalizeArabicForSort(str) {
+    return String(str || '').replace(/[\u064B-\u065F\u0670]/g, '')
+      .replace(/[أإآا]/g, 'ا').replace(/ة/g, 'ه')
+      .replace(/[يى]/g, 'ي').replace(/ؤ/g, 'و')
+      .replace(/\s+/g, ' ').trim();
+  }
+
+  function extractSpeed(serviceText) {
+    if (!serviceText) return { speed: '', displaySpeed: '' };
+    const m = serviceText.match(/(\d+M)/);
+    const speed = m ? m[1] : '';
+    return { speed, displaySpeed: speed || serviceText.trim() };
+  }
+
+  function extractBlockAndHouse(row) {
+    let block = null, house = null;
+    const address = (row.Address || '').trim();
+    const comment = (row.Comment || '').trim();
+    if (address.includes('/')) {
+      const parts = address.split('/').map(s => s.trim());
+      if (parts.length === 2) {
+        const b = parseInt(parts[0], 10); const h = parseInt(parts[1], 10);
+        if (!isNaN(b)) block = b; if (!isNaN(h)) house = h;
+      }
+    }
+    if (block === null || house === null) {
+      const m = comment.match(/الحارة\s*(\d+)\s*\/\s*البيت\s*(\d+)/i);
+      if (m) {
+        const b = parseInt(m[1], 10); const h = parseInt(m[2], 10);
+        if (!isNaN(b) && block === null) block = b;
+        if (!isNaN(h) && house === null) house = h;
+      } else {
+        const gm = comment.match(/(\d+)\s*\/\s*(\d+)/);
+        if (gm && block === null && house === null) {
+          const b = parseInt(gm[1], 10); const h = parseInt(gm[2], 10);
+          if (!isNaN(b) && !isNaN(h)) { block = b; house = h; }
+        }
+      }
+    }
+    return { block, house };
+  }
+
+  function normalizeRow(rawRow) {
+    const n = {};
+    for (const key in rawRow) {
+      const k = key.trim();
+      if (COLUMN_MAPPING[k]) n[COLUMN_MAPPING[k]] = (rawRow[key] || '').trim();
+      else if (ENGLISH_KEYS.includes(k)) n[k] = (rawRow[key] || '').trim();
+    }
+    return n;
+  }
+
+  function enrichRow(rowObj) {
+    const { block, house } = extractBlockAndHouse(rowObj);
+    const { speed, displaySpeed } = extractSpeed(rowObj.Service || '');
+    const pm = (speed && PRICE_MAP[speed]) ? PRICE_MAP[speed] : null;
+    const enriched = {
+      ...rowObj, Service: displaySpeed, _speed: speed,
+      _priceUSD: pm ? pm.usd : '', _priceTL: pm ? pm.tl : '', _priceSY: pm ? pm.sy : '',
+      _block: block, _house: house,
+      _extraIP: '', _extraWifi: '', _extraWifiPass: '', _extraRouterPass: ''
+    };
+    const parts = Object.values(rowObj);
+    if (block !== null) parts.push(String(block));
+    if (house !== null) parts.push(String(house));
+    enriched._baseAllText = parts.join(' ').toLowerCase();
+    enriched._allText = enriched._baseAllText;
+    return enriched;
+  }
+
+  function reapplyPrices() {
+    allRows.forEach(row => {
+      const pm = (row._speed && PRICE_MAP[row._speed]) ? PRICE_MAP[row._speed] : null;
+      row._priceUSD = pm ? pm.usd : '';
+      row._priceTL  = pm ? pm.tl  : '';
+      row._priceSY  = pm ? pm.sy  : '';
+    });
+  }
+
+  function applyExtraData() {
+    allRows.forEach(row => {
+      const u = (row['User name'] || '').trim();
+      const d = (u && extraData[u]) ? extraData[u] : {};
+      row._extraIP         = d.ip         || '';
+      row._extraWifi       = d.wifi       || '';
+      row._extraWifiPass   = d.wifiPass   || '';
+      row._extraRouterPass = d.routerPass || '';
+      const extras = [row._extraIP, row._extraWifi, row._extraWifiPass, row._extraRouterPass]
+        .filter(v => v && String(v).trim() !== '').join(' ');
+      row._allText = (row._baseAllText + ' ' + extras).toLowerCase();
+    });
+  }
+
+
+  /* ========== تحميل CSV ========== */
+  function loadDataFromCSVText(csvText, fileNameForDisplay) {
+    Papa.parse(csvText, {
+      quoteChar: '"', skipEmptyLines: true, header: true,
+      transformHeader: h => h.trim(),
+      complete: function (results) {
+        if (!results.data || results.data.length === 0) {
+          showToast('⚠️ لا توجد بيانات في الملف', 'error');
+          return;
+        }
+        allRows = results.data.map(raw => {
+          const hasData = Object.values(raw).some(v => v && v.toString().trim() !== '');
+          if (!hasData) return null;
+          return enrichRow(normalizeRow(raw));
+        }).filter(r => r !== null);
+
+        applyExtraData();
+        if (fileName) fileName.textContent = fileNameForDisplay || 'users.csv';
+        setDateRangeFromData();
+        applyFiltersAndSort();
+        updateChipTitles();
+      }
+    });
+  }
+
+
+  /* ===== تبويبات حالة الاشتراك ===== */
+  window.__statusFilter = 'all';
+  window.__rdRerender = function () { applyFiltersAndSort(); };
+  function rdStatusKeys(row) {
+    const s = getDateStatus(row.Expiration || '');
+    const ks = [];
+    if (s === 'past') ks.push('past');
+    else if (s === 'today') ks.push('today');
+    else if (s === 'future') {
+      ks.push('future');
+      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      const diff = Math.round((getDateValue(row.Expiration) - t0.getTime()) / 86400000);
+      if (diff <= 3) ks.push('soon');
+    }
+    return ks;
+  }
+  window.__rdMatchStatus = function (row) { return rdStatusKeys(row).indexOf(window.__statusFilter) !== -1; };
+  window.__rdChips = function () {
+    const box = document.getElementById('statusChips'); if (!box) return;
+    const counts = { all: allRows.length, today: 0, soon: 0, past: 0, future: 0 };
+    allRows.forEach(r => rdStatusKeys(r).forEach(k => { counts[k]++; }));
+    const defs = [['all', 'الكل'], ['today', '🟠 ينتهي اليوم'], ['soon', '⏳ خلال 3 أيام'], ['past', '🔴 منتهي'], ['future', '🟢 فعّال']];
+    let html = defs.map(d => `<button type="button" class="status-chip${window.__statusFilter === d[0] ? ' active' : ''}" data-k="${d[0]}">${d[1]} <b>${counts[d[0]]}</b></button>`).join('');
+    try {
+      const t = parseInt(localStorage.getItem('rdLastRefresh') || '0', 10);
+      if (t) { const d = new Date(t); html += `<span class="status-last">🔄 آخر تحديث: ${d.getDate()}/${d.getMonth() + 1} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}</span>`; }
+    } catch (_) {}
+    box.innerHTML = html;
+  };
+  (function () {
+    const box = document.getElementById('statusChips');
+    if (box) box.addEventListener('click', function (e) {
+      const b = e.target.closest('.status-chip'); if (!b) return;
+      window.__statusFilter = b.dataset.k;
+      applyFiltersAndSort();
+    });
+  })();
+
+
+  /* ========== منطق الأسعار ========== */
+  function formatPriceValue(v) {
+    if (v === null || v === undefined || v === '') return '';
+    const n = parseFloat(String(v).replace(/,/g, '').trim());
+    if (isNaN(n)) return String(v);
+    return n.toLocaleString('en-US');
+  }
+
+  function extractMbFromPackageName(name) {
+    if (!name) return null;
+    const m = String(name).match(/(\d+)/);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    return isNaN(n) ? null : n;
+  }
+
+  function countAppliedPackages(data) {
+    if (data && Array.isArray(data.packages)) return data.packages.length;
+    if (Array.isArray(data)) return data.length;
+    return 0;
+  }
+
+  function applyPricesFromParsedJSON(parsed) {
+    const newPrices = JSON.parse(JSON.stringify(PRICE_MAP));
+    let applied = 0;
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.packages)) {
+      parsed.packages.forEach(item => {
+        if (!item || typeof item !== 'object') return;
+        const mb = extractMbFromPackageName(item.package);
+        if (mb === null) return;
+        const speed = mb + 'M';
+        newPrices[speed] = {
+          usd: (item.price_usd !== undefined && item.price_usd !== null) ? formatPriceValue(item.price_usd) : '',
+          tl:  (item.price_try !== undefined && item.price_try !== null) ? formatPriceValue(item.price_try) : '',
+          sy:  (item.price_syp !== undefined && item.price_syp !== null) ? formatPriceValue(item.price_syp) : ''
+        };
+        applied++;
+      });
+    } else if (Array.isArray(parsed)) {
+      parsed.forEach(item => {
+        if (!item || typeof item !== 'object') return;
+        const mb = parseInt(item.mb, 10);
+        if (isNaN(mb)) return;
+        const speed = mb + 'M';
+        newPrices[speed] = {
+          usd: (item.usd !== undefined && item.usd !== null) ? formatPriceValue(item.usd) : '',
+          tl:  (item.try !== undefined && item.try !== null) ? formatPriceValue(item.try) : '',
+          sy:  (item.syp !== undefined && item.syp !== null) ? formatPriceValue(item.syp) : ''
+        };
+        applied++;
+      });
+    } else return false;
+    if (applied === 0) return false;
+    PRICE_MAP = newPrices;
+    return true;
+  }
+
+
+  /* ========== معالجة الملفات المرفوعة ========== */
+  async function handleSmartFiles(files) {
+    if (!files || files.length === 0) return;
+    setUploadBtnLoading(true);
+    const results = [];
+    try {
+      for (const file of files) {
+        try {
+          const text = await readFileAsText(file);
+          const type = detectFileType(file.name, text);
+          if (!type) {
+            results.push({ name: file.name, type: null, status: 'skip', msg: '⚠️ لم يتم التعرف على نوع الملف' });
+            continue;
+          }
+
+          let savedToFolder = false;
+          if (dataDirHandle) {
+            try {
+              const granted = await verifyPermission(dataDirHandle, true);
+              if (granted) {
+                const targetName = getCanonicalFilename(type);
+                await writeFileToDir(dataDirHandle, targetName, text);
+                savedToFolder = true;
+              }
+            } catch (saveErr) { console.warn('فشل الحفظ في المجلد:', saveErr); }
+          }
+
+          try {
+            if (type === 'users') {
+              loadDataFromCSVText(text, file.name);
+              await saveCSVToBrowser(text);
+              sourceInfo.users = { status: 'ok', source: savedToFolder ? 'folder' : 'manual' };
+              setChip(chipUsers, 'ok', `✅ users.csv (${allRows.length})`);
+              results.push({ name: file.name, type, status: 'ok', msg: `📄 ${allRows.length} سجل` + (savedToFolder ? ' • 💾 حُفظ في المجلد' : '') });
+            }
+            else if (type === 'wifi') {
+              const parsed = JSON.parse(text);
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                Object.keys(parsed).forEach(u => {
+                  if (!extraData[u]) extraData[u] = {};
+                  const src = parsed[u] || {};
+                  ['ip', 'wifi', 'wifiPass', 'routerPass'].forEach(f => {
+                    if (src[f] !== undefined && src[f] !== null) extraData[u][f] = src[f];
+                  });
+                });
+                await saveExtraDataToBrowser(extraData);
+                applyExtraData();
+                applyFiltersAndSort();
+                sourceInfo.wifi = { status: 'ok', source: savedToFolder ? 'folder' : 'manual' };
+                setChip(chipWifi, 'ok', `✅ WiFi (${Object.keys(parsed).length})`);
+                results.push({ name: file.name, type, status: 'ok', msg: `📶 ${Object.keys(parsed).length} مشترك` + (savedToFolder ? ' • 💾 حُفظ في المجلد' : '') });
+              } else throw new Error('صيغة غير صحيحة');
+            }
+            else if (type === 'favorites') {
+              const parsed = JSON.parse(text);
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                favorites = parsed;
+                await saveFavoritesToBrowser(favorites);
+                updateFavoritesChip();
+                sourceInfo.favorites = { status: 'ok', source: savedToFolder ? 'folder' : 'manual' };
+                results.push({ name: file.name, type, status: 'ok', msg: `⭐ ${Object.keys(parsed).length} مفضل` + (savedToFolder ? ' • 💾 حُفظ في المجلد' : '') });
+              } else throw new Error('صيغة غير صحيحة');
+            }
+            else if (type === 'prices') {
+              const parsed = JSON.parse(text);
+              if (applyPricesFromParsedJSON(parsed)) {
+                await savePricesToBrowser(PRICE_MAP);
+                reapplyPrices();
+                applyFiltersAndSort();
+                sourceInfo.prices = { status: 'ok', source: savedToFolder ? 'folder' : 'manual' };
+                setChip(chipPrices, 'ok', `✅ الأسعار (${countAppliedPackages(parsed)})`);
+                results.push({ name: file.name, type, status: 'ok', msg: `💰 ${countAppliedPackages(parsed)} باقة` + (savedToFolder ? ' • 💾 حُفظ في المجلد' : '') });
+              } else throw new Error('صيغة غير صحيحة');
+            }
+          } catch (parseErr) {
+            results.push({ name: file.name, type, status: 'fail', msg: '❌ ' + parseErr.message });
+          }
+        } catch (readErr) {
+          results.push({ name: file.name, type: null, status: 'fail', msg: '❌ فشل قراءة الملف: ' + readErr.message });
+        }
+      }
+
+      if (dataDirHandle && results.some(r => r.status === 'ok' && r.msg.includes('المجلد'))) {
+        try { await scanDirContents(dataDirHandle); updateChipTitles(); } catch (e) {}
+      }
+
+      const okCount = results.filter(r => r.status === 'ok').length;
+      if (okCount > 0) showToast(`✅ تم رفع ${okCount} من ${results.length} ملف بنجاح`, 'info');
+      else showToast(`⚠️ لم يتم رفع أي ملف`, 'error');
+
+      showSmartUploadResults(results);
+    } catch (globalErr) {
+      showToast('❌ حدث خطأ غير متوقع: ' + globalErr.message, 'error');
+    } finally {
+      setUploadBtnLoading(false);
+    }
+  }
+
+
+  function showSmartUploadResults(results) {
+    if (!results || results.length === 0) {
+      smartUploadBody.innerHTML = '<p style="text-align:center; color:#6a7e9e;">لا توجد نتائج</p>';
+      smartUploadModalOverlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+      return;
+    }
+
+    let html = '';
+    let okCount = 0, failCount = 0, skipCount = 0;
+
+    results.forEach(r => {
+      const icon = r.status === 'ok' ? '✅' : (r.status === 'fail' ? '❌' : '⚠️');
+      const typeLabel = r.type ? getTypeLabel(r.type) : '❓ غير معروف';
+      const cls = r.status === 'ok' ? 'ok' : (r.status === 'fail' ? 'fail' : 'skip');
+
+      html += `<div class="smart-result-item ${cls}">
+        <span style="font-size: 16px;">${icon}</span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:12px; color:#5d4037; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ${escapeHtml(r.name)}</div>
+          <div style="font-size:11px; opacity:0.85;">${typeLabel}</div>
+          <div style="font-size:11px; margin-top:2px;">${escapeHtml(r.msg)}</div>
+        </div>
+      </div>`;
+
+      if (r.status === 'ok') okCount++;
+      else if (r.status === 'fail') failCount++;
+      else skipCount++;
+    });
+
+    const summary = `<div style="padding:10px 14px; background:#f0f4fa; border-radius:8px; margin-bottom:12px; font-size:13px; font-weight:600; color:#1f3a5f; text-align:center;">
+      إجمالي: ${results.length} ملف
+      ${okCount > 0 ? ` • ✅ ${okCount}` : ''}
+      ${failCount > 0 ? ` • ❌ ${failCount}` : ''}
+      ${skipCount > 0 ? ` • ⚠️ ${skipCount}` : ''}
+    </div>`;
+
+    smartUploadBody.innerHTML = summary + html;
+    smartUploadModalOverlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeSmartUploadModal() {
+    smartUploadModalOverlay.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  smartUploadCloseBtn.addEventListener('click', closeSmartUploadModal);
+  smartUploadOkBtn.addEventListener('click', closeSmartUploadModal);
+  smartUploadModalOverlay.addEventListener('click', e => {
+    if (e.target === smartUploadModalOverlay) closeSmartUploadModal();
+  });
+
+
+  /* ========== الإقلاع ========== */
+  async function bootstrap() {
+    try { const e = await loadExtraDataFromBrowser(); if (e && typeof e === 'object') extraData = e; } catch (_) {}
+    try {
+      const c = await loadColumnsFromBrowser();
+      if (c && typeof c === 'object') {
+        TOGGLEABLE_COLUMNS.forEach(x => { if (typeof c[x.key] === 'boolean') visibleColumns[x.key] = c[x.key]; });
+      }
+    } catch (_) {}
+    try {
+      const p = await loadPricesFromBrowser();
+      if (p && typeof p === 'object') {
+        Object.keys(DEFAULT_PRICE_MAP).forEach(key => {
+          if (p[key]) {
+            PRICE_MAP[key] = {
+              usd: p[key].usd !== undefined ? p[key].usd : DEFAULT_PRICE_MAP[key].usd,
+              tl:  p[key].tl  !== undefined ? p[key].tl  : DEFAULT_PRICE_MAP[key].tl,
+              sy:  p[key].sy  !== undefined ? p[key].sy  : DEFAULT_PRICE_MAP[key].sy
+            };
+          }
+        });
+      }
+    } catch (_) {}
+    try {
+      const f = await loadFavoritesFromBrowser();
+      if (f && typeof f === 'object' && !Array.isArray(f)) favorites = f;
+    } catch (_) {}
+    updateFavoritesChip();
+
+    if (!fsSupported) {
+      connectFolderBtn.style.display = 'none';
+      setChip(chipFolder, 'fail', '❌ متصفحك لا يدعم');
+      showToast('⚠️ استخدم Chrome/Edge لربط المجلد', 'info');
+    } else {
+      const handle = await tryRestoreDirectory();
+      if (handle) {
+        const perm = await handle.queryPermission({ mode: 'readwrite' });
+        if (perm === 'granted') {
+          setChip(chipFolder, 'folder', '📁 ' + handle.name);
+          await scanDirContents(handle);
+          await loadAllFromDirectory(handle);
+          showToast('✅ تم التحميل من المجلد المحفوظ', 'info');
+        } else {
+          setChip(chipFolder, 'loading', '⏳ ينتظر الإذن');
+          setConnectBtn('🔓', 'استئناف', 'استئناف الوصول للمجلد');
+          setTimeout(() => showToast('👆 انقر 🔓 استئناف للوصول إلى مجلد data', 'info'), 500);
+        }
+      } else {
+        setChip(chipFolder, '', '📁 لم يُربط');
+      }
+    }
+
+    if (allRows.length === 0) {
+      try {
+        const saved = await loadCSVFromBrowser();
+        if (saved && saved.text) {
+          loadDataFromCSVText(saved.text, 'users.csv (نسخة محفوظة)');
+          sourceInfo.users = { status: 'ok', source: 'db' };
+          setChip(chipUsers, 'ok', `✅ users.csv (محفوظ)`);
+        } else {
+          tableBody.innerHTML = `<tr><td colspan="${DISPLAY_COLUMNS.length + 3}" class="no-data">📄 اربط مجلد data (🔗) أو ارفع ملفات (📂)</td></tr>`;
+        }
+      } catch (_) {
+        tableBody.innerHTML = `<tr><td colspan="${DISPLAY_COLUMNS.length + 3}" class="no-data">📄 اربط مجلد data (🔗) أو ارفع ملفات (📂)</td></tr>`;
+      }
+    }
+
+    updateChipTitles();
+  }
+
+
+  /* ========== أحداث الأزرار ========== */
+  connectFolderBtn.addEventListener('click', async function () {
+    if (dataDirHandle) {
+      const granted = await verifyPermission(dataDirHandle, true);
+      if (granted) {
+        setChip(chipFolder, 'folder', '📁 ' + dataDirHandle.name);
+        showToast('🔍 جاري فحص محتويات المجلد...', 'info');
+        await scanDirContents(dataDirHandle);
+        await loadAllFromDirectory(dataDirHandle);
+        setConnectBtn('🔗', 'ربط المجلد', 'ربط مجلد data');
+        showToast('✅ تم التحميل');
+        return;
+      }
+    }
+
+    const handle = await pickDirectory();
+    if (handle) {
+      setChip(chipFolder, 'folder', '📁 ' + handle.name);
+      showToast('🔍 جاري فحص محتويات المجلد...', 'info');
+      await scanDirContents(handle);
+      await loadAllFromDirectory(handle);
+      setConnectBtn('🔗', 'ربط المجلد', 'ربط مجلد data');
+      showToast('✅ تم التحميل من المجلد');
+    }
+  });
+
+  reloadAutoBtn.addEventListener('click', async function () {
+    if (!dataDirHandle) { showToast('⚠️ لم يتم ربط مجلد بعد', 'error'); return; }
+    showToast('🔍 جاري إعادة الفحص...', 'info');
+    await scanDirContents(dataDirHandle);
+    const r = await loadAllFromDirectory(dataDirHandle);
+    if (r.usersOk) showToast('🔄 تم إعادة الجلب');
+    else showToast('⚠️ تعذر جلب بعض الملفات', 'error');
+  });
+
+  saveAllBtn.addEventListener('click', async function () {
+    if (SmartSave.pendingCount() === 0 && FavoritesSave.pendingCount() === 0) {
+      showToast('✅ لا توجد تعديلات معلقة', 'info');
+      return;
+    }
+    showToast('💾 جاري الحفظ الفوري...', 'info');
+    await Promise.all([
+      SmartSave.saveNow(),
+      FavoritesSave.saveNow(true)
+    ]);
+  });
+
+
+  smartUploadBtn.addEventListener('click', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    smartFileInput.value = '';
+    smartFileInput.click();
+  });
+
+  smartFileInput.addEventListener('change', async function (e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    await handleSmartFiles(files);
+  });
+
+
+  /* السحب والإفلات */
+  ['dragenter', 'dragover'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      uploadArea.classList.add('dragover');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      uploadArea.classList.remove('dragover');
+    }, false);
+  });
+
+  uploadArea.addEventListener('drop', async function (e) {
+    const dt = e.dataTransfer;
+    if (!dt || !dt.files || dt.files.length === 0) return;
+    const files = Array.from(dt.files);
+    await handleSmartFiles(files);
+  });
+
+
+  /* ========== عرض الجدول ========== */
+  function getActiveColumnCount() {
+    let c = 1;
+    DISPLAY_COLUMNS.forEach(x => { if (visibleColumns[x] !== false) c++; });
+    if (visibleColumns['_block'] !== false) c++;
+    if (visibleColumns['_house'] !== false) c++;
+    return c;
+  }
+
+  function updateSearchBlinkState() {
+    if (globalSearch.value.trim() !== '') globalSearch.classList.add('search-active'); else globalSearch.classList.remove('search-active');
+    if (blockSearch.value.trim() !== '') blockSearch.classList.add('search-active'); else blockSearch.classList.remove('search-active');
+    if (houseSearch.value.trim() !== '') houseSearch.classList.add('search-active'); else houseSearch.classList.remove('search-active');
+    if (dateFromSearch.value && defaultDateFromValue && dateFromSearch.value !== defaultDateFromValue) dateFromSearch.classList.add('search-active'); else dateFromSearch.classList.remove('search-active');
+    if (dateToSearch.value && defaultDateToValue && dateToSearch.value !== defaultDateToValue) dateToSearch.classList.add('search-active'); else dateToSearch.classList.remove('search-active');
+    if (quickDateFilter.value !== '') quickDateFilter.classList.add('search-active'); else quickDateFilter.classList.remove('search-active');
+  }
+
+  function applyFiltersAndSort() {
+    const globalTerm = globalSearch.value.trim().toLowerCase();
+    const blockVal = blockSearch.value.trim();
+    const houseVal = houseSearch.value.trim();
+    const blockNum = blockVal !== '' ? parseInt(blockVal, 10) : null;
+    const houseNum = houseVal !== '' ? parseInt(houseVal, 10) : null;
+    const quickFilter = quickDateFilter.value;
+    const dateFromVal = dateFromSearch.value ? getDateValue(dateFromSearch.value) : null;
+    const dateToVal   = dateToSearch.value   ? getDateValue(dateToSearch.value)   : null;
+
+    let filtered = allRows;
+    if (globalTerm !== '') filtered = filtered.filter(r => r._allText.includes(globalTerm));
+    if (blockNum !== null || houseNum !== null) {
+      filtered = filtered.filter(r => {
+        let m = true;
+        if (blockNum !== null) m = m && r._block === blockNum;
+        if (houseNum !== null) m = m && r._house === houseNum;
+        return m;
+      });
+    }
+    if (dateFromVal !== null || dateToVal !== null) {
+      filtered = filtered.filter(r => {
+        const v = getDateValue(r.Expiration || '');
+        if (v === 0) return false;
+        if (dateFromVal !== null && v < dateFromVal) return false;
+        if (dateToVal !== null && v > dateToVal) return false;
+        return true;
+      });
+    }
+    if (quickFilter !== '') {
+      if (quickFilter === 'favorites') {
+        filtered = filtered.filter(r => {
+          const u = (r['User name'] || '').trim();
+          return u && favorites[u] === true;
+        });
+      } else {
+        const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+        const base = t0.getTime(); const DAY = 86400000;
+        let target = null;
+        if (quickFilter === 'yesterday') target = base - DAY;
+        else if (quickFilter === 'today') target = base;
+        else if (quickFilter === 'tomorrow') target = base + DAY;
+        if (target !== null) filtered = filtered.filter(r => getDateValue(r.Expiration || '') === target);
+      }
+    }
+
+    if (window.__statusFilter && window.__statusFilter !== 'all' && window.__rdMatchStatus) filtered = filtered.filter(window.__rdMatchStatus);
+
+    filteredRows = filtered;
+    if (currentSort.column !== null) {
+      const col = SORT_KEY_MAP[currentSort.column] || currentSort.column;
+      const asc = currentSort.ascending;
+      filteredRows.sort((a, b) => {
+        if (col === 'Expiration') return asc ? getDateValue(a.Expiration || '') - getDateValue(b.Expiration || '') : getDateValue(b.Expiration || '') - getDateValue(a.Expiration || '');
+        if (col === 'Full Name') {
+          const na = normalizeArabicForSort(getFullName(a));
+          const nb = normalizeArabicForSort(getFullName(b));
+          const cmp = na.localeCompare(nb, 'ar');
+          return asc ? cmp : -cmp;
+        }
+        if (col === '_speed') {
+          const nA = parseInt(String(a._speed || '').replace(/\D/g, ''), 10) || 0;
+          const nB = parseInt(String(b._speed || '').replace(/\D/g, ''), 10) || 0;
+          return asc ? nA - nB : nB - nA;
+        }
+        if (col === '_block' || col === '_house') {
+          const vA = a[col] === null ? -1 : a[col];
+          const vB = b[col] === null ? -1 : b[col];
+          return asc ? vA - vB : vB - vA;
+        }
+        if (col === '_priceUSD' || col === '_priceTL' || col === '_priceSY') {
+          const nA = parseFloat(String(a[col]).replace(/,/g, '')) || 0;
+          const nB = parseFloat(String(b[col]).replace(/,/g, '')) || 0;
+          return asc ? nA - nB : nB - nA;
+        }
+        const vA = String(a[col] || '').trim().toLowerCase();
+        const vB = String(b[col] || '').trim().toLowerCase();
+        if (vA < vB) return asc ? -1 : 1;
+        if (vA > vB) return asc ? 1 : -1;
+        return 0;
+      });
+    }
+
+    renderTable(filteredRows);
+    resultsCount.textContent = `عرض ${filteredRows.length} من ${allRows.length}`;
+    updateSearchBlinkState();
+    if (window.__rdChips) window.__rdChips();
+  }
+
+  function displayUSD(v) { return !v ? '-' : String(v).replace(/\$/g, '').trim() + '$'; }
+  function displayTL(v) { return !v ? '-' : String(v).replace(/🇹🇷/g, '').trim() + ' ' + FLAG_TR; }
+  function displaySY(v) { return !v ? '-' : String(v).replace(/🇸🇾/g, '').trim() + ' ' + FLAG_SY; }
+
+  function renderTable(rows) {
+    const colSpan = getActiveColumnCount();
+    const activeCols = DISPLAY_COLUMNS.filter(c => visibleColumns[c] !== false);
+
+    let theadHTML = '<tr>';
+    theadHTML += `<th class="col-index" style="cursor:default;" title="الترقيم">#</th>`;
+    activeCols.forEach(col => {
+      const sortIcon = (currentSort.column === col) ? (currentSort.ascending ? '▲' : '▼') : '⇅';
+      let cls = '';
+      if (col === 'User name') cls = 'col-username';
+      else if (col === 'Full Name') cls = 'col-fullname';
+      else if (col === 'Expiration') cls = 'col-expiration';
+      else if (col === 'Service') cls = 'col-service';
+      else if (col === 'Price $') cls = 'col-priceusd';
+      else if (col === 'Price 🇹🇷') cls = 'col-pricetl';
+      else if (col === 'Price 🇸🇾') cls = 'col-pricesp';
+      else if (col === 'Address') cls = 'col-address';
+      else if (col === '🌐 IP') cls = 'col-ip';
+      else if (col === '📶 WiFi') cls = 'col-wifi';
+      else if (col === '🔑 WiFi Pass') cls = 'col-wifipass';
+      else if (col === '🔐 Router Pass') cls = 'col-routerpass';
+
+      let label = col;
+      if (col === 'Price $') label = `Price ${FLAG_US}`;
+      else if (col === 'Price 🇹🇷') label = `Price ${FLAG_TR}`;
+      else if (col === 'Price 🇸🇾') label = `Price ${FLAG_SY}`;
+      else if (col === 'Full Name') label = '👤 Full Name';
+
+      theadHTML += `<th data-column="${escapeHtml(col)}" class="${cls}">${label}<span class="sort-icon">${sortIcon}</span></th>`;
+    });
+    if (visibleColumns['_block'] !== false) theadHTML += `<th data-column="_block" class="col-block">🏠 حارة</th>`;
+    if (visibleColumns['_house'] !== false) theadHTML += `<th data-column="_house" class="col-house">🏡 بيت</th>`;
+    theadHTML += '</tr>';
+    tableHead.innerHTML = theadHTML;
+
+    document.querySelectorAll('#tableHead th').forEach(th => {
+      th.addEventListener('click', function () {
+        const col = this.dataset.column;
+        if (!col) return;
+        if (currentSort.column === col) currentSort.ascending = !currentSort.ascending;
+        else { currentSort.column = col; currentSort.ascending = true; }
+        applyFiltersAndSort();
+      });
+    });
+
+    if (rows.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="${colSpan}" class="no-data">🔍 لا توجد نتائج</td></tr>`;
+      return;
+    }
+
+    let bodyHTML = '';
+    rows.forEach((row, idx) => {
+      const username = (row['User name'] || '').trim();
+      const isFav = username && favorites[username] === true;
+
+      bodyHTML += `<tr data-idx="${idx}" class="${isFav ? 'is-favorite' : ''}">`;
+      bodyHTML += `<td class="col-index" style="background:#f0f4fa; font-weight:600; color:#1f3a5f;">${idx + 1}</td>`;
+      activeCols.forEach(col => {
+        let val = '';
+        let tdClass = '';
+
+        if (EXTRA_FIELD_MAP[col]) {
+          const field = EXTRA_FIELD_MAP[col];
+          if (!username || username === '-') {
+            val = '<span style="color:#b0bdd0;">—</span>';
+          } else {
+            const rawVal = (extraData[username] && extraData[username][field]) || '';
+            const hasValue = rawVal && String(rawVal).trim() !== '';
+            if (field === 'ip') {
+              if (hasValue) {
+                let url = String(rawVal).trim();
+                if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
+                val = `<span class="ip-display">
+                  <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="ip-link" title="فتح ${escapeHtml(url)}">${escapeHtml(rawVal)}</a>
+                  <button type="button" class="ip-edit-btn" data-username="${escapeHtml(username)}" data-field="ip" title="تعديل">✏️</button>
+                </span>`;
+              } else {
+                val = `<span class="ip-empty" data-username="${escapeHtml(username)}" data-field="ip" title="إضافة">—</span>`;
+              }
+            } else {
+              val = `<input type="text" class="extra-input ${hasValue ? 'has-value' : ''}"
+                            data-username="${escapeHtml(username)}"
+                            data-field="${field}"
+                            value="${escapeHtml(rawVal)}"
+                            placeholder="—" autocomplete="off" spellcheck="false">`;
+            }
+          }
+        }
+        else if (col === 'Service') {
+          val = row[col] || '';
+          if (row._speed) {
+            let sc = 'speed-default';
+            if (row._speed === '1M') sc = 'speed-1M';
+            else if (row._speed === '2M') sc = 'speed-2M';
+            else if (row._speed === '3M') sc = 'speed-3M';
+            else if (row._speed === '5M') sc = 'speed-5M';
+            else if (row._speed === '8M') sc = 'speed-8M';
+            else if (row._speed === '10M') sc = 'speed-10M';
+            val = `<span class="${sc}">${escapeHtml(val)}</span>`;
+          } else val = escapeHtml(val);
+        }
+        else if (col === 'Price $')    { val = displayUSD(row._priceUSD); tdClass = 'td-price'; }
+        else if (col === 'Price 🇹🇷')  { val = displayTL(row._priceTL);   tdClass = 'td-price'; }
+        else if (col === 'Price 🇸🇾')  { val = displaySY(row._priceSY);   tdClass = 'td-price'; }
+        else if (col === 'Expiration') {
+          const d = row[col] || '';
+          const st = getDateStatus(d);
+          const em = getExpirationEmoji(d);
+          if (st === 'past') tdClass = 'exp-past';
+          else if (st === 'today') tdClass = 'exp-today';
+          else if (st === 'future') tdClass = 'exp-future';
+          else tdClass = 'exp-unknown';
+          val = `${em} ${escapeHtml(d)}`;
+        }
+        else if (col === 'Full Name') {
+          const fn = getFullName(row);
+          const favIcon = isFav ? '⭐' : '☆';
+          const favTitle = isFav ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة';
+          val = (username && username !== '-'
+                  ? `<button type="button" class="fav-btn ${isFav ? 'active' : ''}" data-username="${escapeHtml(username)}" title="${favTitle}">${favIcon}</button>`
+                  : '') +
+                `<span class="clickable-name" title="انقر لعرض التفاصيل">${escapeHtml(fn)}</span>`;
+          tdClass = 'td-fullname';
+        }
+        else if (col === 'User name') {
+          const un = (row[col] || '').trim();
+          if (un && un !== '-') {
+            const editUrl = RADIUS_URL + encodeURIComponent(un);
+            val = `<span class="user-cell">
+              <a href="${editUrl}" target="_blank" rel="noopener noreferrer" class="user-link" title="فتح في تبويب جديد">${escapeHtml(un)}</a>
+              <button type="button" class="copy-username-btn" data-username="${escapeHtml(un)}" title="نسخ">📋</button>
+            </span>`;
+          } else val = '-';
+        }
+        else val = escapeHtml(row[col] || '');
+
+        bodyHTML += tdClass ? `<td class="${tdClass}">${val}</td>` : `<td>${val}</td>`;
+      });
+      if (visibleColumns['_block'] !== false) bodyHTML += `<td>${row._block !== null ? row._block : '-'}</td>`;
+      if (visibleColumns['_house'] !== false) bodyHTML += `<td>${row._house !== null ? row._house : '-'}</td>`;
+      bodyHTML += '</tr>';
+    });
+    tableBody.innerHTML = bodyHTML;
+  }
+
+
+  /* ===================================================================
+     ★★★ ربط الأحداث بالجدول ★★★
+     =================================================================== */
+  tableBody.addEventListener('input', function (e) {
+    const inp = e.target.closest('.extra-input');
+    if (!inp) return;
+    const username = inp.dataset.username;
+    const field = inp.dataset.field;
+    if (!username || !field) return;
+    const val = inp.value;
+
+    if (!extraData[username]) extraData[username] = {};
+    extraData[username][field] = val;
+
+    const colKey = field === 'ip' ? '_extraIP' :
+                   field === 'wifi' ? '_extraWifi' :
+                   field === 'wifiPass' ? '_extraWifiPass' :
+                   field === 'routerPass' ? '_extraRouterPass' : null;
+    if (colKey) {
+      allRows.forEach(r => {
+        if ((r['User name'] || '').trim() === username) {
+          r[colKey] = val;
+          const extras = [r._extraIP, r._extraWifi, r._extraWifiPass, r._extraRouterPass]
+            .filter(v => v && String(v).trim() !== '').join(' ');
+          r._allText = (r._baseAllText + ' ' + extras).toLowerCase();
+        }
+      });
+    }
+
+    if (val && val.trim() !== '') inp.classList.add('has-value');
+    else inp.classList.remove('has-value');
+    inp.classList.add('unsaved');
+
+    SmartSave.onEdit(inp);
+  });
+
+  tableBody.addEventListener('blur', function (e) {
+    const inp = e.target.closest && e.target.closest('.extra-input');
+    if (!inp) return;
+
+    if (inp.dataset.isIp === 'true' || inp.dataset.field === 'ip') {
+      setTimeout(() => {
+        const cell = inp.closest('td');
+        if (!cell) return;
+        const username = inp.dataset.username;
+        const val = inp.value.trim();
+        SmartSave.clearCell(inp);
+
+        if (val !== '') {
+          let url = val;
+          if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
+          cell.innerHTML = `<span class="ip-display">
+            <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="ip-link">${escapeHtml(val)}</a>
+            <button type="button" class="ip-edit-btn" data-username="${escapeHtml(username)}" data-field="ip" title="تعديل">✏️</button>
+          </span>`;
+        } else {
+          cell.innerHTML = `<span class="ip-empty" data-username="${escapeHtml(username)}" data-field="ip" title="إضافة">—</span>`;
+        }
+      }, 180);
+    }
+
+    if (SmartSave.pendingCount() > 0) {
+      SmartSave.saveNow();
+    }
+  }, true);
+
+  tableBody.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      const inp = e.target.closest && e.target.closest('.extra-input');
+      if (inp) { e.preventDefault(); inp.blur(); }
+    }
+    if (e.key === 'Escape') {
+      const inp = e.target.closest && e.target.closest('.extra-input');
+      if (inp) { e.preventDefault(); inp.blur(); }
+    }
+  });
+
+
+  /* ========== نافذة معلومات المشترك ========== */
+  function getStatusText(d) {
+    const s = getDateStatus(d);
+    if (s === 'past') return '<span class="modal-status past">🔴 منتهي</span>';
+    if (s === 'today') return '<span class="modal-status today">🟠 ينتهي اليوم</span>';
+    if (s === 'future') return '<span class="modal-status future">🟢 فعّال</span>';
+    return '<span class="modal-status unknown">⚪ غير محدد</span>';
+  }
+  function getStatusTextPlain(d) {
+    const s = getDateStatus(d);
+    if (s === 'past') return '🔴 منتهي';
+    if (s === 'today') return '🟠 ينتهي اليوم';
+    if (s === 'future') return '🟢 فعّال';
+    return '⚪ غير محدد';
+  }
+  function stripFlag(v) {
+    if (!v) return '—';
+    return String(v).replace(/🇹🇷/g, '').replace(/🇸🇾/g, '').replace(/🇺🇸/g, '').replace(/\$/g, '').trim() || '—';
+  }
+
+  let currentModalRow = null;
+  function showModal(row) {
+    currentModalRow = row;
+    const fn = getFullName(row);
+    window.__rdRow = row; window.__rdRowName = fn;
+    modalTitle.textContent = `👤 ${fn}`;
+    const expDate = row.Expiration || '—';
+    const blockVal = row._block !== null ? row._block : '—';
+    const houseVal = row._house !== null ? row._house : '—';
+    const speedVal = row._speed || row.Service || '—';
+    const usd = stripFlag(row._priceUSD); const tl = stripFlag(row._priceTL); const sy = stripFlag(row._priceSY);
+    const usdDisplay = (usd === '—') ? '—' : usd + '$';
+    modalBody.innerHTML = `
+      <div class="modal-section">
+        <p>👤 <strong>الاسم:</strong> ${escapeHtml(fn)}</p>
+        <p>🏠 <strong>الحارة:</strong> ${escapeHtml(blockVal)} | <strong>البيت:</strong> ${escapeHtml(houseVal)}</p>
+        <p class="section-gap">📅 <strong>تاريخ الانتهاء:</strong> ${escapeHtml(expDate)}</p>
+        <p>📊 <strong>الحالة:</strong> ${getStatusText(expDate)}</p>
+        <p class="section-gap">📡 <strong>السرعة:</strong> <span style="color:#2a7de1;font-weight:700;">${escapeHtml(speedVal)}</span></p>
+        <p>💰 <strong>التسعير:</strong>
+          <span style="color:#2e7d32;font-weight:700;">🇺🇸 ${escapeHtml(usdDisplay)}</span> |
+          <span style="color:#c62828;font-weight:700;">🇹🇷 ${escapeHtml(tl)}</span> |
+          <span style="color:#6a1b9a;font-weight:700;">🇸🇾 ${escapeHtml(sy)}</span>
+        </p>
+        ${window.__rdNative ? '<p class="section-gap"><button type="button" id="rdEditExpBtn" style="background:#2a7de1;color:#fff;border:0;border-radius:8px;padding:10px 14px;font-size:15px;cursor:pointer;">✏️ تعديل تاريخ الانتهاء في الراديوس</button></p>' : ''}
+      </div>`;
+    modalOverlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() { modalOverlay.classList.remove('active'); document.body.style.overflow = ''; currentModalRow = null; }
+  modalCloseBtn.addEventListener('click', closeModal);
+  modalCloseBtn2.addEventListener('click', closeModal);
+  modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (modalOverlay.classList.contains('active')) closeModal();
+      if (columnsModalOverlay.classList.contains('active')) closeColumnsModal();
+      if (exportModalOverlay.classList.contains('active')) closeExportModal();
+      if (guideModalOverlay.classList.contains('active')) closeGuideModal();
+      if (smartUploadModalOverlay.classList.contains('active')) closeSmartUploadModal();
+    }
+  });
+
+  modalCopyBtn.addEventListener('click', function () {
+    if (!currentModalRow) return;
+    const r = currentModalRow;
+    const text =
+`👤 الاسم: ${getFullName(r)}
+🏠 الحارة: ${r._block !== null ? r._block : '—'}  |  البيت: ${r._house !== null ? r._house : '—'}
+
+📅 تاريخ الانتهاء: ${r.Expiration || '—'}
+📊 الحالة: ${getStatusTextPlain(r.Expiration || '')}
+
+📡 السرعة: ${r._speed || r.Service || '—'}
+💰 التسعير: 🇺🇸 ${stripFlag(r._priceUSD)} | 🇹🇷 ${stripFlag(r._priceTL)} | 🇸🇾 ${stripFlag(r._priceSY)}`;
+    copyToClipboard(text, '✅ تم النسخ');
+  });
+
+
+  /* ========== أحداث الجدول ========== */
+  tableBody.addEventListener('click', function (e) {
+
+    const favBtn = e.target.closest('.fav-btn');
+    if (favBtn) {
+      e.preventDefault(); e.stopPropagation();
+      const username = favBtn.dataset.username;
+      if (!username) return;
+
+      if (favorites[username]) {
+        delete favorites[username];
+        favBtn.textContent = '☆';
+        favBtn.classList.remove('active');
+        favBtn.title = 'إضافة إلى المفضلة';
+        const tr = favBtn.closest('tr');
+        if (tr) tr.classList.remove('is-favorite');
+        showToast(`☆ تم إزالة ${username} من المفضلة`, 'info');
+      } else {
+        favorites[username] = true;
+        favBtn.textContent = '⭐';
+        favBtn.classList.add('active');
+        favBtn.title = 'إزالة من المفضلة';
+        const tr = favBtn.closest('tr');
+        if (tr) tr.classList.add('is-favorite');
+        showToast(`⭐ تم إضافة ${username} إلى المفضلة`, 'gold');
+      }
+
+      updateFavoritesChip();
+
+      FavoritesSave.saveNow(true);
+
+      if (SmartSave.pendingCount() > 0) {
+        SmartSave.saveNow();
+      }
+
+      saveExtraDataToBrowser(extraData).catch(err => console.error('extraData save:', err));
+
+      if (quickDateFilter.value === 'favorites') applyFiltersAndSort();
+      return;
+    }
+
+    const ipEditBtn = e.target.closest('.ip-edit-btn');
+    if (ipEditBtn) {
+      e.preventDefault(); e.stopPropagation();
+      const cell = ipEditBtn.closest('td');
+      const username = ipEditBtn.dataset.username;
+      const field = ipEditBtn.dataset.field;
+      const curVal = (extraData[username] && extraData[username][field]) || '';
+      cell.innerHTML = `<input type="text" class="extra-input has-value" data-username="${escapeHtml(username)}" data-field="${field}" data-is-ip="true" value="${escapeHtml(curVal)}" placeholder="—" autocomplete="off" spellcheck="false">`;
+      const input = cell.querySelector('.extra-input');
+      if (input) { input.focus(); input.select(); }
+      return;
+    }
+
+    const ipEmpty = e.target.closest('.ip-empty');
+    if (ipEmpty) {
+      e.preventDefault(); e.stopPropagation();
+      const cell = ipEmpty.closest('td');
+      const username = ipEmpty.dataset.username;
+      const field = ipEmpty.dataset.field;
+      cell.innerHTML = `<input type="text" class="extra-input" data-username="${escapeHtml(username)}" data-field="${field}" data-is-ip="true" value="" placeholder="—" autocomplete="off" spellcheck="false">`;
+      const input = cell.querySelector('.extra-input');
+      if (input) input.focus();
+      return;
+    }
+
+    if (e.target.closest('.ip-link')) return;
+    if (e.target.closest('.extra-input')) return;
+
+    const copyBtn = e.target.closest('.copy-username-btn');
+    if (copyBtn) {
+      e.preventDefault(); e.stopPropagation();
+      const un = copyBtn.dataset.username || '';
+      if (!un) return;
+      copyToClipboard(un, `📋 تم نسخ: ${un}`);
+      copyBtn.textContent = '✅';
+      copyBtn.classList.add('copied');
+      setTimeout(() => { copyBtn.textContent = '📋'; copyBtn.classList.remove('copied'); }, 1500);
+      return;
+    }
+
+    const uLink = e.target.closest('.user-link');
+    if (uLink) {
+      e.preventDefault(); e.stopPropagation();
+      const href = uLink.getAttribute('href');
+      let w = null;
+      try { w = window.open(href, '_blank'); } catch (_) {}
+      if (!w) {
+        try { window.top.location.href = href; }
+        catch (_) {
+          copyToClipboard(href, '⚠️ تعذر فتح الراديوس، تم نسخ الرابط');
+        }
+      }
+      return;
+    }
+
+    const target = e.target.closest('.clickable-name');
+    if (!target) return;
+    const tr = target.closest('tr');
+    if (!tr) return;
+    const idx = parseInt(tr.dataset.idx, 10);
+    if (isNaN(idx) || idx < 0 || idx >= filteredRows.length) return;
+    showModal(filteredRows[idx]);
+  });
+
+
+  /* ========== نافذة الأعمدة ========== */
+  function renderColumnsList() {
+    let html = '';
+    TOGGLEABLE_COLUMNS.forEach(c => {
+      const checked = visibleColumns[c.key] !== false;
+      html += `<label class="column-check ${checked ? 'checked' : ''}" data-key="${escapeHtml(c.key)}">
+        <input type="checkbox" data-key="${escapeHtml(c.key)}" ${checked ? 'checked' : ''}>
+        <span>${escapeHtml(c.label)}</span>
+      </label>`;
+    });
+    columnsList.innerHTML = html;
+  }
+  function openColumnsModal() { renderColumnsList(); columnsModalOverlay.classList.add('active'); document.body.style.overflow = 'hidden'; }
+  function closeColumnsModal() { columnsModalOverlay.classList.remove('active'); document.body.style.overflow = ''; }
+  openColumnsBtn.addEventListener('click', openColumnsModal);
+  columnsCloseBtn.addEventListener('click', closeColumnsModal);
+  columnsCloseBtn2.addEventListener('click', closeColumnsModal);
+  columnsModalOverlay.addEventListener('click', e => { if (e.target === columnsModalOverlay) closeColumnsModal(); });
+
+  columnsList.addEventListener('change', function (e) {
+    const cb = e.target.closest('input[type="checkbox"]');
+    if (!cb) return;
+    const key = cb.dataset.key;
+    if (!key) return;
+    visibleColumns[key] = cb.checked;
+    const label = cb.closest('.column-check');
+    if (label) { if (cb.checked) label.classList.add('checked'); else label.classList.remove('checked'); }
+    if (currentSort.column === key && !cb.checked) currentSort.column = null;
+    saveColumnsToBrowser(visibleColumns).catch(() => {});
+    renderTable(filteredRows);
+  });
+
+  columnsSelectAllBtn.addEventListener('click', function () {
+    TOGGLEABLE_COLUMNS.forEach(c => visibleColumns[c.key] = true);
+    saveColumnsToBrowser(visibleColumns).catch(() => {});
+    renderColumnsList(); renderTable(filteredRows);
+    showToast('✅ تم تحديد الكل');
+  });
+  columnsResetBtn.addEventListener('click', function () {
+    if (!confirm('استعادة الأعمدة الافتراضية؟')) return;
+    TOGGLEABLE_COLUMNS.forEach(c => visibleColumns[c.key] = true);
+    saveColumnsToBrowser(visibleColumns).catch(() => {});
+    renderColumnsList(); renderTable(filteredRows);
+    showToast('↺ تم الاستعادة');
+  });
+
+
+  /* ========== تصدير الأسماء ========== */
+  function buildExportedNames() {
+    const names = [];
+    filteredRows.forEach(row => { if (isValidName(row)) names.push(getFullName(row)); });
+    if (exportSortAlpha && exportSortAlpha.checked) {
+      names.sort((a, b) => normalizeArabicForSort(a).localeCompare(normalizeArabicForSort(b), 'ar'));
+    }
+    return names;
+  }
+  function refreshExportModalContent() {
+    const names = buildExportedNames();
+    if (names.length === 0) {
+      exportTextArea.value = 'لا توجد أسماء صالحة للتصدير.';
+      exportCount.textContent = 'إجمالي الأسماء الصالحة للتصدير: 0';
+      return;
+    }
+    exportTextArea.value = names.map((n, i) => `${i + 1}. ${n}`).join('\n');
+    exportCount.textContent = `إجمالي الأسماء الصالحة للتصدير: ${names.length}`;
+  }
+  function openExportModal() { refreshExportModalContent(); exportModalOverlay.classList.add('active'); document.body.style.overflow = 'hidden'; setTimeout(() => exportTextArea.focus(), 200); }
+  function closeExportModal() { exportModalOverlay.classList.remove('active'); document.body.style.overflow = ''; }
+  exportNamesBtn.addEventListener('click', openExportModal);
+  exportCloseBtn.addEventListener('click', closeExportModal);
+  exportCloseBtn2.addEventListener('click', closeExportModal);
+  exportModalOverlay.addEventListener('click', e => { if (e.target === exportModalOverlay) closeExportModal(); });
+  if (exportSortAlpha) exportSortAlpha.addEventListener('change', () => {
+    if (exportModalOverlay.classList.contains('active')) refreshExportModalContent();
+  });
+  exportCopyBtn.addEventListener('click', () => {
+    if (!exportTextArea.value) return;
+    copyToClipboard(exportTextArea.value, '✅ تم نسخ الأسماء');
+  });
+  exportDownloadBtn.addEventListener('click', function () {
+    if (!exportTextArea.value) return;
+    const blob = new Blob(['\ufeff' + exportTextArea.value], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    a.href = url; a.download = `اسماء_${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}.txt`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('⬇️ تم تحميل الملف');
+  });
+
+
+  /* ========== نافذة التعليمات ========== */
+  function openGuideModal() { guideModalOverlay.classList.add('active'); document.body.style.overflow = 'hidden'; }
+  function closeGuideModal() { guideModalOverlay.classList.remove('active'); document.body.style.overflow = ''; }
+  guideCloseBtn.addEventListener('click', closeGuideModal);
+  guideCloseBtn2.addEventListener('click', closeGuideModal);
+  guideModalOverlay.addEventListener('click', e => { if (e.target === guideModalOverlay) closeGuideModal(); });
+  guideOkBtn.addEventListener('click', function () {
+    closeGuideModal();
+    setTimeout(() => connectFolderBtn.click(), 200);
+  });
+
+
+  /* ========== البحث ========== */
+  const debouncedFilter = debounce(applyFiltersAndSort, 150);
+  globalSearch.addEventListener('input', () => { updateSearchBlinkState(); debouncedFilter(); });
+  blockSearch.addEventListener('input', () => { updateSearchBlinkState(); debouncedFilter(); });
+  houseSearch.addEventListener('input', () => { updateSearchBlinkState(); debouncedFilter(); });
+  dateFromSearch.addEventListener('change', () => { updateSearchBlinkState(); applyFiltersAndSort(); });
+  dateToSearch.addEventListener('change', () => { updateSearchBlinkState(); applyFiltersAndSort(); });
+  quickDateFilter.addEventListener('change', () => { updateSearchBlinkState(); applyFiltersAndSort(); });
+
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      if (document.activeElement === globalSearch) return;
+      e.preventDefault();
+      globalSearch.focus(); globalSearch.select();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      const hasPending = SmartSave.pendingCount() > 0 || FavoritesSave.pendingCount() > 0;
+      if (hasPending) {
+        Promise.all([SmartSave.saveNow(), FavoritesSave.saveNow(true)])
+          .then(() => showToast('💾 تم الحفظ الفوري', 'info'));
+      } else {
+        showToast('✅ لا توجد تعديلات للحفظ', 'info');
+      }
+    }
+  });
+
+  resetBtn.addEventListener('click', function () {
+    globalSearch.value = '';
+    blockSearch.value = '';
+    houseSearch.value = '';
+    quickDateFilter.value = '';
+    setDateRangeFromData();
+    currentSort.column = null; currentSort.ascending = true;
+    applyFiltersAndSort();
+    updateSearchBlinkState();
+  });
+
+
+  /* تحذير قبل الإغلاق */
+  window.addEventListener('beforeunload', function (e) {
+    if (SmartSave.pendingCount() > 0 || FavoritesSave.pendingCount() > 0) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+
+  /* ★★★ طلب صلاحية المجلد تلقائياً عند أول نقرة من المستخدم ★★★ */
+  let permRefreshAttempted = false;
+  document.addEventListener('click', async function () {
+    if (permRefreshAttempted || !dataDirHandle) return;
+    permRefreshAttempted = true;
+    try {
+      const perm = await dataDirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        console.log('🔓 طلب صلاحية الكتابة للمجلد...');
+        const granted = await dataDirHandle.requestPermission({ mode: 'readwrite' });
+        if (granted) {
+          console.log('✅ تم تجديد صلاحية المجلد بنجاح');
+          setChip(chipFolder, 'folder', '📁 ' + (dataDirHandle.name || 'data'));
+          setConnectBtn('🔗', 'ربط المجلد', 'ربط مجلد data');
+          showToast('✅ تم تجديد صلاحية المجلد', 'info');
+        } else {
+          console.warn('⚠️ لم يتم منح الصلاحية');
+        }
+      } else {
+        console.log('✅ صلاحية الكتابة سارية بالفعل');
+      }
+    } catch (e) {
+      console.warn('فشل تجديد الصلاحية:', e);
+    }
+  }, { capture: true });
+
+  /* حماية إضافية: طلب الصلاحية عند التركيز على حقل إدخال أو زر مفضلة */
+  document.addEventListener('focusin', async function (e) {
+    const isExtraInput = e.target && e.target.classList && e.target.classList.contains('extra-input');
+    const isFavBtn = e.target && e.target.classList && e.target.classList.contains('fav-btn');
+    if (!isExtraInput && !isFavBtn) return;
+    if (!dataDirHandle) return;
+    try {
+      const perm = await dataDirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        const granted = await dataDirHandle.requestPermission({ mode: 'readwrite' });
+        if (granted) {
+          setChip(chipFolder, 'folder', '📁 ' + (dataDirHandle.name || 'data'));
+          console.log('✅ تم تجديد الصلاحية عند focusin');
+        }
+      }
+    } catch (_) {}
+  }, { capture: true });
+
+
+  /* ===================================================================
+     ★★★ الكيبورد الافتراضي (Virtual Keyboard) ★★★
+     =================================================================== */
+  (function initVirtualKeyboard() {
+    const vkToggleBtn = document.getElementById('vkToggleBtn');
+    const vkPanel     = document.getElementById('virtualKeyboard');
+    const vkBody      = document.getElementById('vkBody');
+    const vkCloseBtn  = document.getElementById('vkCloseBtn');
+    const globalSearchEl = document.getElementById('globalSearch');
+
+    if (!vkToggleBtn || !vkPanel || !vkBody || !globalSearchEl) return;
+
+    let currentLang = 'ar';
+    let cursorPos = 0;
+
+    const LAYOUTS = {
+      ar: [
+        ['1','2','3','4','5','6','7','8','9','0'],
+        ['ض','ص','ث','ق','ف','غ','ع','ه','خ','ح','ج','د'],
+        ['ش','س','ي','ب','ل','ا','ت','ن','م','ك','ط'],
+        ['ئ','ء','ؤ','ر','لا','ى','ة','و','ز','ظ']
+      ],
+      en: [
+        ['1','2','3','4','5','6','7','8','9','0'],
+        ['q','w','e','r','t','y','u','i','o','p'],
+        ['a','s','d','f','g','h','j','k','l'],
+        ['z','x','c','v','b','n','m']
+      ]
+    };
+
+    function renderKeyboard() {
+      const layout = LAYOUTS[currentLang];
+      let html = '';
+      layout.forEach((row, rowIdx) => {
+        html += '<div class="vk-row">';
+        row.forEach(key => {
+          html += '<button type="button" class="vk-key" data-key="' +
+                  key.replace(/"/g, '&quot;') + '">' + key + '</button>';
+        });
+        /* ✅ زر ⌫ (Backspace) بجانب زر 0 في الصف الأول */
+        if (rowIdx === 0) {
+          html += '<button type="button" class="vk-key vk-special" data-action="backspace" title="حذف">⌫</button>';
+        }
+        html += '</div>';
+      });
+      html += '<div class="vk-row">';
+      html += '<button type="button" class="vk-key vk-space" data-action="space">مسافة</button>';
+      html += '</div>';
+      vkBody.innerHTML = html;
+    }
+
+    function updateCursor() {
+      if (document.activeElement === globalSearchEl) {
+        const s = globalSearchEl.selectionStart;
+        if (s !== null && s !== undefined) cursorPos = s;
+      }
+    }
+
+    function focusSearch() {
+      try { globalSearchEl.focus({ preventScroll: true }); }
+      catch (e) { globalSearchEl.focus(); }
+    }
+
+    function insertText(text) {
+      const value = globalSearchEl.value;
+      const pos = Math.min(cursorPos, value.length);
+      globalSearchEl.value = value.slice(0, pos) + text + value.slice(pos);
+      cursorPos = pos + text.length;
+      try { globalSearchEl.setSelectionRange(cursorPos, cursorPos); } catch (e) {}
+      globalSearchEl.dispatchEvent(new Event('input', { bubbles: true }));
+      focusSearch();
+    }
+
+    function backspace() {
+      const value = globalSearchEl.value;
+      const pos = Math.min(cursorPos, value.length);
+      if (pos <= 0) return;
+      globalSearchEl.value = value.slice(0, pos - 1) + value.slice(pos);
+      cursorPos = pos - 1;
+      try { globalSearchEl.setSelectionRange(cursorPos, cursorPos); } catch (e) {}
+      globalSearchEl.dispatchEvent(new Event('input', { bubbles: true }));
+      focusSearch();
+    }
+
+    function clearAll() {
+      globalSearchEl.value = '';
+      cursorPos = 0;
+      globalSearchEl.dispatchEvent(new Event('input', { bubbles: true }));
+      focusSearch();
+    }
+
+    vkBody.addEventListener('click', function (e) {
+      const key = e.target.closest('.vk-key');
+      if (!key) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const action = key.dataset.action;
+      if (action === 'backspace') backspace();
+      else if (action === 'space') insertText(' ');
+      else if (action === 'clear') clearAll();
+      else if (key.dataset.key) insertText(key.dataset.key);
+    });
+
+    vkPanel.querySelectorAll('.vk-lang-btn').forEach(btn => {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        vkPanel.querySelectorAll('.vk-lang-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        currentLang = this.dataset.lang;
+        renderKeyboard();
+        focusSearch();
+      });
+    });
+
+    function openKeyboard() {
+      vkPanel.classList.add('show');
+      vkToggleBtn.classList.add('active');
+      updateCursor();
+      focusSearch();
+    }
+    function closeKeyboard() {
+      vkPanel.classList.remove('show');
+      vkToggleBtn.classList.remove('active');
+    }
+
+    vkToggleBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (vkPanel.classList.contains('show')) closeKeyboard();
+      else openKeyboard();
+    });
+
+    if (vkCloseBtn) {
+      vkCloseBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeKeyboard();
+      });
+    }
+
+    /* إغلاق الكيبورد عند النقر خارج نطاقه */
+    document.addEventListener('click', function (e) {
+      if (!vkPanel.classList.contains('show')) return;
+      if (vkPanel.contains(e.target)) return;
+      if (vkToggleBtn.contains(e.target)) return;
+      if (e.target === globalSearchEl) return;
+      closeKeyboard();
+    }, true);
+
+    /* تتبّع موضع المؤشر داخل حقل البحث */
+    ['click', 'keyup', 'focus', 'input'].forEach(ev => {
+      globalSearchEl.addEventListener(ev, updateCursor);
+    });
+    document.addEventListener('selectionchange', function () {
+      if (document.activeElement === globalSearchEl) updateCursor();
+    });
+
+    /* إغلاق بمفتاح Escape */
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && vkPanel.classList.contains('show')) {
+        closeKeyboard();
+      }
+    });
+
+    renderKeyboard();
+  })();
+
+
+  /* الإقلاع */
+  async function initFirstTime() {
+    if (!fsSupported) return;
+    const handle = await loadDirHandleFromBrowser();
+    if (!handle) setTimeout(openGuideModal, 800);
+  }
+
+  window.addEventListener('resize', updateChipTitles);
+
+  bootstrap().then(() => initFirstTime());
+
+  console.log('✅ Subscribers.html ready - Smart Save + Favorites Save + Virtual Keyboard enabled');
+
+})();
+</script>
+
+<script>
+/* ===== تحديث المشتركين من الراديوس (يعمل داخل تطبيق الأندرويد فقط) ===== */
+(function () {
+  var cap = null;
+  try { cap = (window.top && window.top.Capacitor) || (window.parent && window.parent.Capacitor) || window.Capacitor || null; } catch (_) { cap = window.Capacitor || null; }
+  var native = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+  if (!native) return;                       // في المتصفح: لا شيء يتغير
+  var http = cap.Plugins && cap.Plugins.CapacitorHttp;
+  var CFG_KEY = 'radiusCfg';
+  var DEF = { base: 'http://192.168.192.192/radiusmanager/admin.php', user: '', pass: '', exportUrl: '' };
+  var CANDIDATES = ['?cont=export_users', '?cont=export_users_csv', '?cont=users_export', '?cont=list_users&export=1', '?cont=export'];
+
+  function cfg() { try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch (_) { return Object.assign({}, DEF); } }
+  function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (_) {} }
+
+  var st = document.createElement('style');
+  st.textContent = '#connectFolderBtn{display:inline-flex !important}' +
+    '#rdOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px}' +
+    '#rdBox{background:#fff;border-radius:14px;padding:16px;width:100%;max-width:420px;direction:rtl;font-family:inherit;max-height:90vh;overflow:auto}' +
+    '#rdBox label{display:block;font-size:13px;margin:10px 0 4px;color:#333}' +
+    '#rdBox input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #bbb;border-radius:8px;font-size:15px;direction:ltr}' +
+    '#rdBox button{padding:10px 14px;border:0;border-radius:8px;font-size:15px;margin:12px 6px 0 0;cursor:pointer}' +
+    '#rdBox pre{background:#f3f3f3;padding:8px;border-radius:8px;font-size:11px;white-space:pre-wrap;word-break:break-all;direction:ltr;text-align:left;max-height:30vh;overflow:auto}' +
+    '#rdToast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:100000;font-size:14px;max-width:90%;text-align:center}';
+  document.head.appendChild(st);
+
+  var btn = document.getElementById('connectFolderBtn');
+  var input = document.getElementById('smartFileInput');
+  function relabel() {
+    if (!btn) return;
+    btn.innerHTML = '<span class="btn-icon">🔄</span><span class="btn-label">تحديث من الراديوس</span>';
+    btn.title = 'تحديث المشتركين من الراديوس (ضغطة مطوّلة للإعدادات)';
+  }
+  relabel();
+  var n = 0, iv = setInterval(function () { relabel(); if (++n > 20) clearInterval(iv); }, 500);
+
+  function toast(m, ms) {
+    var t = document.getElementById('rdToast'); if (t) t.remove();
+    t = document.createElement('div'); t.id = 'rdToast'; t.textContent = m; document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, ms || 3500);
+  }
+
+  function hdr(h, name) {
+    if (!h) return '';
+    var k = Object.keys(h).find(function (x) { return x.toLowerCase() === name.toLowerCase(); });
+    return k ? String(h[k]) : '';
+  }
+  var SKIP = /^(path|expires|domain|secure|httponly|samesite|max-age|version|comment)$/i;
+  function mergeCookies(jar, setCookie) {
+    if (!setCookie) return;
+    var re = /([A-Za-z0-9_.\-]+)=([^;,\s]*)/g, m;
+    while ((m = re.exec(setCookie))) { if (!SKIP.test(m[1])) jar[m[1]] = m[2]; }
+  }
+  function cookieHeader(jar) { return Object.keys(jar).map(function (k) { return k + '=' + jar[k]; }).join('; '); }
+
+  async function req(url, method, data, jar) {
+    for (var i = 0; i < 6; i++) {
+      var headers = { 'Accept': 'text/html,text/csv,*/*' };
+      var ck = cookieHeader(jar); if (ck) headers['Cookie'] = ck;
+      var opts = { url: url, method: method, headers: headers, disableRedirects: true, responseType: 'text', connectTimeout: 15000, readTimeout: 30000 };
+      if (method === 'POST') { headers['Content-Type'] = 'application/x-www-form-urlencoded'; opts.data = data; }
+      if (!http) throw new Error('إضافة الشبكة غير متوفرة داخل التطبيق');
+      window.__rdStep = method + ' ' + url;
+      var r = await Promise.race([
+        http.request(opts),
+        new Promise(function (_, rej) { setTimeout(function () { rej(new Error('انتهت المهلة (25 ثانية) أثناء: ' + method + ' ' + url)); }, 25000); })
+      ]);
+      mergeCookies(jar, hdr(r.headers, 'set-cookie'));
+      if (r.status >= 300 && r.status < 400 && hdr(r.headers, 'location')) {
+        url = new URL(hdr(r.headers, 'location'), url).href; method = 'GET'; data = undefined; continue;
+      }
+      return { status: r.status, headers0: r.headers, text: typeof r.data === 'string' ? r.data : JSON.stringify(r.data || ''), url: url };
+    }
+    throw new Error('تحويلات كثيرة');
+  }
+
+  function loginFields(html, pageUrl, c) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var forms = Array.from(doc.querySelectorAll('form'));
+    var form = forms.find(function (f) { return f.querySelector('input[type=password]'); });
+    if (!form) return null;
+    var fields = {}, pwName = null, userName = null;
+    form.querySelectorAll('input,select').forEach(function (el) {
+      var nm = el.getAttribute('name'); if (!nm) return;
+      var ty = (el.getAttribute('type') || 'text').toLowerCase();
+      if (ty === 'password') { fields[nm] = c.pass; pwName = nm; }
+      else if (ty === 'text' && !userName) { fields[nm] = c.user; userName = nm; }
+      else if (el.tagName === 'SELECT') { var o = el.querySelector('option[selected]') || el.querySelector('option'); fields[nm] = o ? (o.getAttribute('value') || o.textContent) : ''; }
+      else if (ty === 'checkbox' || ty === 'radio') { if (el.checked) fields[nm] = el.getAttribute('value') || 'on'; }
+      else fields[nm] = el.getAttribute('value') || '';
+    });
+    var action = new URL(form.getAttribute('action') || pageUrl, pageUrl).href;
+    return { action: action, fields: fields };
+  }
+  function visibleText(html) {
+    try {
+      var d = new DOMParser().parseFromString(html, 'text/html');
+      d.querySelectorAll('script,style,link,meta').forEach(function (n) { n.remove(); });
+      var al = Array.from(d.querySelectorAll('.alert,.error,.text-danger,.help-block,.has-error,[class*=err]')).map(function (n) { return n.textContent.trim(); }).filter(Boolean).join(' | ');
+      var body = (d.body ? d.body.textContent : '').replace(/\s+/g, ' ').trim();
+      return (al ? 'ALERTS: ' + al + ' || ' : '') + body;
+    } catch (_) { return html; }
+  }
+  function md5hex(str) { return md5bin(unescape(encodeURIComponent(str))); }
+  function md5bin(bytes) {
+    function rl(n, c) { return (n << c) | (n >>> (32 - c)); }
+    function add(x, y) { return (x + y) | 0; }
+    var n = bytes.length, w = [], i;
+    for (i = 0; i < n; i++) w[i >> 2] = (w[i >> 2] || 0) | (bytes.charCodeAt(i) << ((i % 4) * 8));
+    w[n >> 2] = (w[n >> 2] || 0) | (0x80 << ((n % 4) * 8));
+    var len = (((n + 8) >> 6) + 1) * 16; for (i = 0; i < len; i++) w[i] = w[i] || 0;
+    w[len - 2] = n * 8;
+    var S = [7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+    var K = []; for (i = 0; i < 64; i++) K[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296) | 0;
+    var a0 = 0x67452301, b0 = 0xefcdab89 | 0, c0 = 0x98badcfe | 0, d0 = 0x10325476;
+    for (var o = 0; o < len; o += 16) {
+      var A = a0, B = b0, C = c0, D = d0, F, g;
+      for (i = 0; i < 64; i++) {
+        if (i < 16) { F = (B & C) | (~B & D); g = i; }
+        else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+        else if (i < 48) { F = B ^ C ^ D; g = (3 * i + 5) % 16; }
+        else { F = C ^ (B | ~D); g = (7 * i) % 16; }
+        F = add(add(F, A), add(K[i], w[o + g]));
+        A = D; D = C; C = B; B = add(B, rl(F, S[i]));
+      }
+      a0 = add(a0, A); b0 = add(b0, B); c0 = add(c0, C); d0 = add(d0, D);
+    }
+    var out = '';
+    [a0, b0, c0, d0].forEach(function (v) { for (var j = 0; j < 4; j++) out += ('0' + ((v >>> (j * 8)) & 255).toString(16)).slice(-2); });
+    return out;
+  }
+
+  function hexToBin(h) { var o = ''; for (var i = 0; i < h.length; i += 2) o += String.fromCharCode(parseInt(h.substr(i, 2), 16)); return o; }
+  function hmacMd5hex(key, data) {
+    var kb = unescape(encodeURIComponent(key));
+    if (kb.length > 64) kb = hexToBin(md5bin(kb));
+    while (kb.length < 64) kb += '\0';
+    var ip = '', op = '';
+    for (var i = 0; i < 64; i++) { ip += String.fromCharCode(kb.charCodeAt(i) ^ 0x36); op += String.fromCharCode(kb.charCodeAt(i) ^ 0x5c); }
+    var inner = hexToBin(md5bin(ip + unescape(encodeURIComponent(data))));
+    return md5bin(op + inner);
+  }
+  function discover(html, pageUrl) {
+    var out = { links: [], forms: [], headers: [] };
+    try {
+      var d = new DOMParser().parseFromString(html, 'text/html');
+      var bad = /delete|remove|clear|reset|logout|kill|disconnect|\bdel\b/i;
+      Array.from(d.querySelectorAll('a[href]')).forEach(function (a) {
+        var h = a.getAttribute('href') || '', t = (a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+        if ((/export|csv|xls|download/i.test(h) || /export|csv|xls|تصدير/i.test(t)) && !bad.test(h) && h.indexOf('javascript') !== 0) {
+          try { out.links.push({ u: new URL(h, pageUrl).href, t: t }); } catch (_) {}
+        }
+      });
+      Array.from(d.querySelectorAll('form')).forEach(function (f) {
+        var txt = f.outerHTML;
+        if (/export|csv/i.test(txt)) out.forms.push((f.getAttribute('method') || 'get') + ' ' + (f.getAttribute('action') || '') + ' [' + Array.from(f.querySelectorAll('input,select')).map(function (x) { return x.getAttribute('name'); }).filter(Boolean).join(',') + ']');
+      });
+      var tb = Array.from(d.querySelectorAll('table')).sort(function (a, b) { return b.rows.length - a.rows.length; })[0];
+      if (tb && tb.rows[0]) out.headers = Array.from(tb.rows[0].cells).map(function (c2) { return c2.textContent.replace(/\s+/g, ' ').trim(); });
+    } catch (_) {}
+    return out;
+  }
+  function tableToCsv(html) {
+    try {
+      var d = new DOMParser().parseFromString(html, 'text/html');
+      var tb = Array.from(d.querySelectorAll('table')).sort(function (a, b) { return b.rows.length - a.rows.length; })[0];
+      if (!tb || tb.rows.length < 20) return null;
+      var hr = null;
+      for (var i = 0; i < Math.min(tb.rows.length, 5); i++) {
+        var cells = Array.from(tb.rows[i].cells).map(function (c2) { return c2.textContent.replace(/\s+/g, ' ').trim(); });
+        if (cells.some(function (x) { return /^user\s*name$/i.test(x); }) && cells.some(function (x) { return /^expiration$/i.test(x); }) && cells.some(function (x) { return /^service$/i.test(x); })) { hr = i; break; }
+      }
+      if (hr === null) return null;
+      var q = function (x) { return '"' + String(x).replace(/"/g, '""') + '"'; };
+      var head = Array.from(tb.rows[hr].cells).map(function (c2) { return c2.textContent.replace(/\s+/g, ' ').trim(); });
+      var lines = [head.join(';')];
+      for (var r = hr + 1; r < tb.rows.length; r++) {
+        var tds = Array.from(tb.rows[r].cells).map(function (c2) { return q(c2.textContent.replace(/\s+/g, ' ').trim()); });
+        if (tds.length === head.length) lines.push(tds.join(';'));
+      }
+      return lines.length > 20 ? lines.join('\n') : null;
+    } catch (_) { return null; }
+  }
+  function enc(o) { return Object.keys(o).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(o[k]); }).join('&'); }
+  function looksLikeCsv(t) { return /user\s*name/i.test(t.slice(0, 400)) && t.indexOf(';') > -1 && t.split('\n').length > 2; }
+
+  async function refresh() {
+    var c = cfg();
+    if (!c.user || !c.pass) { openSettings('أدخل اسم المستخدم وكلمة السر أولًا'); return; }
+    toast('⏳ 1/4 جاري الاتصال بالراديوس...', 90000);
+    var jar = {}, log = [];
+    var wd = setTimeout(function () { try { alert('توقف عند: ' + (window.__rdStep || 'قبل أول طلب') + '\n' + log.join('\n')); } catch (_) {} }, 40000);
+    try {
+      var p = await req(c.base, 'GET', null, jar);
+      log.push('login page: ' + p.status);
+      toast('⏳ 2/4 تسجيل الدخول...', 90000);
+      var p0text = p.text;
+      var lf = loginFields(p.text, p.url, c);
+      if (lf) {
+        var attempts = [];
+        if (Object.prototype.hasOwnProperty.call(lf.fields, 'md5')) {
+          var f1 = Object.assign({}, lf.fields);
+          f1.md5 = hmacMd5hex(lf.fields.managername !== undefined ? lf.fields.managername : c.user, md5hex(c.pass));
+          Object.keys(f1).forEach(function (k) { if (f1[k] === c.pass) f1[k] = ''; });
+          attempts.push({ name: 'md5', fields: f1 });
+        }
+        attempts.push({ name: 'plain', fields: lf.fields });
+        log.push('action: ' + lf.action);
+        log.push('cookies: ' + (Object.keys(jar).join(',') || 'NONE') + ' | setcookie hdr: ' + (hdr(p.headers0, 'set-cookie') ? 'yes' : 'no'));
+        log.push('fields: ' + Object.keys(lf.fields).join(', ') + ' | user len=' + c.user.length + ' pass len=' + c.pass.length);
+        var lr = null, ok = false;
+        for (var ai = 0; ai < attempts.length && !ok; ai++) {
+          lr = await req(lf.action, 'POST', enc(attempts[ai].fields), jar);
+          log.push('login ' + attempts[ai].name + ': ' + lr.status);
+          ok = !loginFields(lr.text, lr.url, c);
+        }
+        p = lr;
+        if (!ok) {
+          var sm = '';
+          try {
+            var dd = new DOMParser().parseFromString(p0text, 'text/html');
+            var fm = dd.querySelector('form');
+            sm += 'FORM: ' + (fm ? fm.outerHTML.slice(0, fm.outerHTML.indexOf('>') + 1) : '-') + ' || ';
+            sm += 'SUBMIT: ' + Array.from(dd.querySelectorAll('input[type=submit],button')).map(function (x) { return x.outerHTML.slice(0, 200); }).join(' ') + ' || ';
+            sm += 'MD5FIELD: ' + (dd.querySelector('[name=md5]') ? dd.querySelector('[name=md5]').outerHTML : '-') + ' || ';
+            sm += 'SCRIPTS: ' + Array.from(dd.querySelectorAll('script:not([src])')).map(function (x) { return x.textContent.replace(/\s+/g, ' ').slice(0, 700); }).join(' ## ');
+          } catch (_) { sm = 'parse error'; }
+          throw { diag: true, msg: 'فشل تسجيل الدخول: ' + (visibleText(lr.text).match(/ALERTS: ([^|]*)/) || ['', 'تحقق من الاسم وكلمة السر'])[1], log: log, body: sm };
+        }
+      } else { log.push('لا يوجد نموذج دخول (ربما الجلسة مفتوحة)'); }
+
+      toast('⏳ 3/4 جلب المشتركين...', 90000);
+      var urls = c.exportUrl ? [c.exportUrl].concat(CANDIDATES) : CANDIDATES; var usedUrl = null;
+      var csv = null, last = null, pages = [];
+      for (var i = 0; i < urls.length && !csv; i++) {
+        var u = /^https?:/i.test(urls[i]) ? urls[i] : c.base + urls[i];
+        var r = await req(u, 'GET', null, jar);
+        log.push('export ' + urls[i] + ': ' + r.status + ' len=' + r.text.length);
+        last = r; pages.push(r);
+        if (looksLikeCsv(r.text)) { csv = r.text; usedUrl = u; }
+      }
+      /* بحث عن رابط التصدير الحقيقي داخل صفحات الراديوس */
+      var found = null;
+      if (!csv) {
+        toast('⏳ 3/4 أبحث عن رابط التصدير...', 90000);
+        var seen = {}, cand = [];
+        pages.forEach(function (pg) {
+          var d = discover(pg.text, pg.url);
+          d.links.forEach(function (l) { if (!seen[l.u]) { seen[l.u] = 1; cand.push(l); } });
+          if (!found) found = d;
+        });
+        for (var k = 0; k < cand.length && k < 8 && !csv; k++) {
+          var rr = await req(cand[k].u, 'GET', null, jar);
+          log.push('try ' + cand[k].u.replace(c.base, '') + ': ' + rr.status + ' len=' + rr.text.length);
+          if (looksLikeCsv(rr.text)) { csv = rr.text; usedUrl = cand[k].u; }
+        }
+      }
+      /* احتياطي: تحويل جدول المشتركين في الصفحة إلى CSV بنفس الأعمدة */
+      if (!csv) {
+        for (var q = 0; q < pages.length && !csv; q++) {
+          var t = tableToCsv(pages[q].text);
+          if (t) { csv = t; log.push('table->csv from page ' + q); }
+        }
+      }
+      if (!csv) {
+        var info = '';
+        pages.forEach(function (pg, ix) { var d = discover(pg.text, pg.url); info += '[' + ix + '] LINKS: ' + d.links.map(function (l) { return l.t + ' -> ' + l.u.replace(c.base, ''); }).slice(0, 8).join(' ; ') + ' | FORMS: ' + d.forms.slice(0, 4).join(' ; ') + ' | TH: ' + d.headers.slice(0, 30).join(',') + ' || '; });
+        throw { diag: true, msg: 'دخلت إلى الراديوس لكن لم أجد رابط تصدير المشتركين الصحيح. أرسل لي هذه المعلومات.', log: log, body: info };
+      }
+
+      if (usedUrl && /^https?:/i.test(usedUrl)) { var cs = cfg(); if (cs.exportUrl !== usedUrl) { cs.exportUrl = usedUrl; saveCfg(cs); } }
+      try { localStorage.setItem('rdLastRefresh', String(Date.now())); } catch (_) {}
+      var file = new File([csv], 'users.csv', { type: 'text/csv' });
+      var dt = new DataTransfer(); dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      clearTimeout(wd);
+      toast('✅ تم التحديث من الراديوس', 4000);
+    } catch (e) {
+      clearTimeout(wd);
+      try { alert('خطأ: ' + (e && (e.msg || e.message) ? (e.msg || e.message) : JSON.stringify(e)) + '\n' + log.join('\n') + '\nآخر خطوة: ' + (window.__rdStep || '-')); } catch (_) {}
+      if (e && e.diag) showDiag(e); else showDiag({ msg: 'تعذّر الاتصال: ' + (e && e.message ? e.message : (e && JSON.stringify(e)) || e), log: log.concat(['آخر خطوة: ' + (window.__rdStep || '-')]), body: '' });
+    }
+  }
+
+  function overlay(html) {
+    var o = document.getElementById('rdOverlay'); if (o) o.remove();
+    o = document.createElement('div'); o.id = 'rdOverlay'; o.innerHTML = '<div id="rdBox">' + html + '</div>';
+    document.body.appendChild(o); return o;
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function showDiag(e) {
+    var t = document.getElementById('rdToast'); if (t) t.remove();
+    var o = overlay('<b>' + esc(e.msg) + '</b><pre>' + esc((e.log || []).join('\n') + '\n---\n' + String(e.body || '').replace(/\s+/g, ' ').slice(0, 1800)) + '</pre>' +
+      '<button id="rdSet" style="background:#2a7de1;color:#fff">الإعدادات</button><button id="rdX" style="background:#ddd">إغلاق</button>');
+    o.querySelector('#rdX').onclick = function () { o.remove(); };
+    o.querySelector('#rdSet').onclick = function () { openSettings(); };
+  }
+  function openSettings(note) {
+    var c = cfg();
+    var o = overlay((note ? '<div style="color:#c00">' + esc(note) + '</div>' : '') +
+      '<b>إعدادات الراديوس</b>' +
+      '<label>عنوان لوحة الراديوس</label><input id="rdBase" value="' + esc(c.base) + '">' +
+      '<label>اسم المستخدم</label><input id="rdUser" value="' + esc(c.user) + '" autocapitalize="off">' +
+      '<label>كلمة السر (تبقى على هاتفك فقط)</label><input id="rdPass" type="password" value="' + esc(c.pass) + '">' +
+      '<label>رابط تصدير المشتركين (اتركه فارغًا ليجرّب تلقائيًا)</label><input id="rdExp" value="' + esc(c.exportUrl) + '">' +
+      '<button id="rdSave" style="background:#2e7d32;color:#fff">حفظ وتحديث</button><button id="rdX" style="background:#ddd">إغلاق</button>');
+    o.querySelector('#rdX').onclick = function () { o.remove(); };
+    o.querySelector('#rdSave').onclick = function () {
+      saveCfg({ base: o.querySelector('#rdBase').value.trim(), user: o.querySelector('#rdUser').value.trim(), pass: o.querySelector('#rdPass').value, exportUrl: o.querySelector('#rdExp').value.trim() });
+      o.remove(); refresh();
+    };
+  }
+
+  /* ===== تعديل تاريخ الانتهاء في الراديوس (يعمل داخل التطبيق فقط) ===== */
+  window.__rdNative = true;
+  var LOG_KEY = 'rdExpLog', TESTED_KEY = 'rdExpTested';
+  function pairsEnc(pairs) { return pairs.map(function (p) { return encodeURIComponent(p[0]) + '=' + encodeURIComponent(p[1]); }).join('&'); }
+  function parseYMD(s) {
+    var m = String(s || '').match(/^\s*(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})/);
+    if (!m) return null;
+    var a = m[1], b = m[2], c2 = m[3], y, mo, d;
+    if (a.length === 4) { y = +a; mo = +b; d = +c2; }
+    else if (c2.length === 4) { d = +a; mo = +b; y = +c2; }
+    else return null;
+    if (!(y > 1999 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return null;
+    return { y: y, m: mo, d: d };
+  }
+  function padN(n, len) { var s = String(n); while (s.length < len) s = '0' + s; return s; }
+  function fmtLike(old, p) {
+    var m = String(old || '').match(/^(\s*)(\d{1,4})([\/\-.])(\d{1,2})[\/\-.](\d{1,4})(.*)$/);
+    if (!m) return null;
+    var sep = m[3], rest = m[6];
+    if (m[2].length === 4) return m[1] + padN(p.y, 4) + sep + padN(p.m, m[4].length) + sep + padN(p.d, m[5].length) + rest;
+    if (m[5].length === 4) return m[1] + padN(p.d, m[2].length) + sep + padN(p.m, m[4].length) + sep + padN(p.y, 4) + rest;
+    return null;
+  }
+  function addDaysP(p, n) { var dt = new Date(p.y, p.m - 1, p.d + n); return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() }; }
+  function isoOf(p) { return padN(p.y, 4) + '-' + padN(p.m, 2) + '-' + padN(p.d, 2); }
+  function todayP() { var t = new Date(); return { y: t.getFullYear(), m: t.getMonth() + 1, d: t.getDate() }; }
+  function dateInputP(v) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ''); return m ? { y: +m[1], m: +m[2], d: +m[3] } : null; }
+  function readLog() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (_) { return []; } }
+  function pushLog(e) { try { var a = readLog(); a.push(e); localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(-100))); } catch (_) {} }
+  function fmtTs(t) { var d = new Date(t); return d.getDate() + '/' + (d.getMonth() + 1) + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function rmToast() { var t = document.getElementById('rdToast'); if (t) t.remove(); }
+
+  async function rdLogin(c, jar, log) {
+    var p = await req(c.base, 'GET', null, jar);
+    log.push('login page: ' + p.status);
+    var lf = loginFields(p.text, p.url, c);
+    if (!lf) { log.push('الجلسة مفتوحة'); return; }
+    var attempts = [];
+    if (Object.prototype.hasOwnProperty.call(lf.fields, 'md5')) {
+      var f1 = Object.assign({}, lf.fields);
+      f1.md5 = hmacMd5hex(lf.fields.managername !== undefined ? lf.fields.managername : c.user, md5hex(c.pass));
+      Object.keys(f1).forEach(function (k) { if (f1[k] === c.pass) f1[k] = ''; });
+      attempts.push({ name: 'md5', fields: f1 });
+    }
+    attempts.push({ name: 'plain', fields: lf.fields });
+    var lr = null, ok = false;
+    for (var ai = 0; ai < attempts.length && !ok; ai++) {
+      lr = await req(lf.action, 'POST', enc(attempts[ai].fields), jar);
+      log.push('login ' + attempts[ai].name + ': ' + lr.status);
+      ok = !loginFields(lr.text, lr.url, c);
+    }
+    if (!ok) throw { diag: true, msg: 'فشل تسجيل الدخول: تحقق من الاسم وكلمة السر', log: log, body: '' };
+  }
+
+  /* قراءة نموذج تعديل المشترك كما هو، دون افتراض أسماء حقول ثابتة */
+  function collectForm(html, pageUrl) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var forms = Array.prototype.slice.call(doc.querySelectorAll('form'));
+    var form = null, expEl = null, names = [];
+    for (var i = 0; i < forms.length; i++) {
+      var els = forms[i].querySelectorAll('input,select,textarea');
+      var cand = null;
+      for (var j = 0; j < els.length; j++) {
+        var nm = els[j].getAttribute('name') || '';
+        if (nm) names.push(nm);
+        if (/^expiration$/i.test(nm)) { cand = els[j]; }
+        else if (!cand && /expir/i.test(nm)) { cand = els[j]; }
+      }
+      if (cand && !form) { form = forms[i]; expEl = cand; }
+    }
+    if (!form) return { error: 'لم أجد حقل تاريخ الانتهاء في صفحة التعديل', names: names };
+    if (expEl.tagName.toLowerCase() !== 'input') return { error: 'حقل الانتهاء ليس من نوع إدخال نصي', names: names };
+    var pairs = [], submits = [];
+    Array.prototype.forEach.call(form.querySelectorAll('input,select,textarea,button'), function (el) {
+      var nm = el.getAttribute('name');
+      var tag = el.tagName.toLowerCase();
+      var ty = (el.getAttribute('type') || (tag === 'button' ? 'submit' : 'text')).toLowerCase();
+      if (el.hasAttribute('disabled')) return;
+      if (ty === 'submit' || ty === 'image') { submits.push(el); return; }
+      if (!nm || ty === 'button' || ty === 'reset' || ty === 'file') return;
+      if (tag === 'select') {
+        var opts = Array.prototype.slice.call(el.querySelectorAll('option'));
+        var sel = opts.filter(function (o) { return o.hasAttribute('selected'); });
+        if (!sel.length && !el.hasAttribute('multiple') && opts.length) sel = [opts[0]];
+        sel.forEach(function (o) { pairs.push([nm, o.hasAttribute('value') ? o.getAttribute('value') : o.textContent.trim()]); });
+      } else if (tag === 'textarea') {
+        pairs.push([nm, el.textContent]);
+      } else if (ty === 'checkbox' || ty === 'radio') {
+        if (el.hasAttribute('checked')) pairs.push([nm, el.hasAttribute('value') ? el.getAttribute('value') : 'on']);
+      } else {
+        pairs.push([nm, el.getAttribute('value') || '']);
+      }
+    });
+    /* اختيار زر الحفظ بحذر: لا نضغط أي زر اسمه حذف/مسح/إلغاء */
+    var bad = /delete|remove|\bdel\b|reset|clear|cancel|disable|حذف|مسح|إلغاء/i;
+    var good = /save|update|submit|apply|edit|ok|حفظ|تعديل|تحديث/i;
+    var descs = submits.map(function (s) { return (s.getAttribute('name') || '') + ' ' + (s.getAttribute('value') || '') + ' ' + (s.textContent || ''); });
+    var okIdx = [];
+    descs.forEach(function (t, i) { if (!bad.test(t)) okIdx.push(i); });
+    var submit = null;
+    if (submits.length) {
+      var pick = null;
+      if (okIdx.length === 1) pick = okIdx[0];
+      else {
+        var g = okIdx.filter(function (i) { return good.test(descs[i]); });
+        if (g.length === 1) pick = g[0];
+      }
+      if (pick === null) return { error: 'تعذّر تحديد زر الحفظ بأمان في صفحة التعديل', names: descs };
+      var sb = submits[pick];
+      if (sb.getAttribute('name')) submit = [sb.getAttribute('name'), sb.getAttribute('value') || ''];
+    }
+    var method = (form.getAttribute('method') || 'get').toUpperCase();
+    var action = new URL(form.getAttribute('action') || pageUrl, pageUrl).href;
+    return { action: action, method: method, pairs: pairs, submit: submit, expName: expEl.getAttribute('name'), expOld: expEl.getAttribute('value') || '' };
+  }
+  function pairMap(pairs, skip) { var m = {}; pairs.forEach(function (p) { if (p[0] === skip) return; (m[p[0]] = m[p[0]] || []).push(p[1]); }); return m; }
+  function diffPairs(a, b, skip) {
+    var ma = pairMap(a, skip), mb = pairMap(b, skip), keys = {}, out = [];
+    Object.keys(ma).concat(Object.keys(mb)).forEach(function (k) { keys[k] = 1; });
+    Object.keys(keys).forEach(function (k) { if ((ma[k] || []).join('|') !== (mb[k] || []).join('|')) out.push(k); });
+    return out;
+  }
+
+  async function editExpiry(row) {
+    var user = String(row['User name'] || '').trim();
+    if (!user || user === '-') { toast('لا يوجد اسم مستخدم لهذا المشترك'); return; }
+    var c = cfg();
+    if (!c.user || !c.pass) { openSettings('أدخل اسم المستخدم وكلمة السر أولًا'); return; }
+    var curP = parseYMD(row.Expiration);
+    var hist = readLog().filter(function (e) { return e.u === user; }).slice(-4).reverse();
+    var histHtml = hist.length ? '<div style="margin-top:10px;font-size:12px;color:#555"><b>آخر التعديلات:</b>' + hist.map(function (e) {
+      return '<div>' + esc(fmtTs(e.t)) + ' · من <span dir="ltr">' + esc(e.from) + '</span> إلى <span dir="ltr">' + esc(e.to) + '</span>' + (e.ok ? ' ✓' : ' ✗') +
+        (e.from && parseYMD(e.from) ? ' <a href="#" data-back="' + esc(e.from) + '">↩ تراجع</a>' : '') + '</div>';
+    }).join('') + '</div>' : '';
+    var o = overlay('<b>✏️ تعديل تاريخ الانتهاء</b>' +
+      '<div style="margin-top:8px">👤 ' + esc(window.__rdRowName || user) + ' <span dir="ltr">(' + esc(user) + ')</span></div>' +
+      '<div>📅 الحالي: <b dir="ltr">' + esc(row.Expiration || '—') + '</b></div>' +
+      '<label>التاريخ الجديد</label><input id="rdNewDate" type="date" value="' + isoOf(curP || todayP()) + '">' +
+      '<div><button id="rdP30e" style="background:#e3f2fd">+30 يوم من الانتهاء</button><button id="rdP30t" style="background:#e3f2fd">+30 يوم من اليوم</button></div>' + histHtml +
+      '<div><button id="rdGo" style="background:#2e7d32;color:#fff">متابعة</button><button id="rdX" style="background:#ddd">إغلاق</button></div>');
+    var inp = o.querySelector('#rdNewDate');
+    o.querySelector('#rdX').onclick = function () { o.remove(); };
+    o.querySelector('#rdP30e').onclick = function () { inp.value = isoOf(addDaysP(curP || todayP(), 30)); };
+    o.querySelector('#rdP30t').onclick = function () { inp.value = isoOf(addDaysP(todayP(), 30)); };
+    Array.prototype.forEach.call(o.querySelectorAll('[data-back]'), function (a) {
+      a.onclick = function (ev) { ev.preventDefault(); var p = parseYMD(a.getAttribute('data-back')); if (p) inp.value = isoOf(p); };
+    });
+    o.querySelector('#rdGo').onclick = function () {
+      var np = dateInputP(inp.value);
+      if (!np) { toast('اختر تاريخًا صحيحًا'); return; }
+      o.remove();
+      proceedEdit(row, user, c, np);
+    };
+  }
+
+  async function proceedEdit(row, user, c, newP) {
+    var jar = {}, log = [];
+    var editUrl = c.base + '?cont=edit_user&username=' + encodeURIComponent(user);
+    try {
+      toast('⏳ الاتصال بالراديوس...', 90000);
+      await rdLogin(c, jar, log);
+      var pg = await req(editUrl, 'GET', null, jar);
+      log.push('edit page: ' + pg.status);
+      var f = collectForm(pg.text, pg.url);
+      if (f.error) throw { diag: true, msg: f.error, log: log, body: 'FIELDS: ' + (f.names || []).join(', ') };
+      var newVal = f.expOld ? fmtLike(f.expOld, newP) : isoOf(newP);
+      if (!newVal) throw { diag: true, msg: 'صيغة التاريخ في الراديوس غير مفهومة: ' + f.expOld, log: log, body: '' };
+      var send = f.pairs.map(function (p) { return p[0] === f.expName ? [p[0], newVal] : p; });
+      if (f.submit) send.push(f.submit);
+      var hasUser = f.pairs.some(function (p) { return String(p[1]).trim().toLowerCase() === user.toLowerCase(); });
+      var tested = false; try { tested = localStorage.getItem(TESTED_KEY) === '1'; } catch (_) {}
+      var list = f.pairs.map(function (p) { var v = /pass|pwd/i.test(p[0]) ? '••••' : String(p[1]).slice(0, 40); return p[0] + ' = ' + v; }).join('\n');
+      rmToast();
+      var o = overlay('<b>تأكيد التعديل في الراديوس</b>' +
+        '<div style="margin-top:8px">👤 <span dir="ltr">' + esc(user) + '</span></div>' +
+        '<div>الحقل: <span dir="ltr">' + esc(f.expName) + '</span></div>' +
+        '<div>من: <b dir="ltr">' + esc(f.expOld || '—') + '</b></div>' +
+        '<div>إلى: <b dir="ltr" style="color:#2e7d32">' + esc(newVal) + '</b></div>' +
+        (hasUser ? '' : '<div style="color:#c00;margin-top:6px">⚠️ لم أجد اسم المشترك ضمن حقول الصفحة، تأكد من صحة الصفحة.</div>') +
+        (tested ? '' : '<div style="color:#c60;margin-top:6px">⚠️ أول استخدام: جرّبه على مشترك تجريبي أولًا.</div>') +
+        '<details style="margin-top:8px"><summary>الحقول التي سيتم إرسالها (' + f.pairs.length + ')</summary><pre>' + esc(list) + '</pre></details>' +
+        '<div><button id="rdOk" style="background:#2e7d32;color:#fff">✅ تأكيد وحفظ</button><button id="rdX" style="background:#ddd">إلغاء</button></div>');
+      o.querySelector('#rdX').onclick = function () { o.remove(); };
+      o.querySelector('#rdOk').onclick = function () { o.remove(); saveEdit(row, user, c, jar, log, f, send, newVal, editUrl); };
+    } catch (e) { editFail(e, log); }
+  }
+
+  async function saveEdit(row, user, c, jar, log, f, send, newVal, editUrl) {
+    try {
+      toast('⏳ جاري الحفظ في الراديوس...', 90000);
+      var body = pairsEnc(send), rr;
+      if (f.method === 'GET') rr = await req(f.action + (f.action.indexOf('?') > -1 ? '&' : '?') + body, 'GET', null, jar);
+      else rr = await req(f.action, 'POST', body, jar);
+      log.push('save: ' + rr.status);
+      var pg2 = await req(editUrl, 'GET', null, jar);
+      var f2 = collectForm(pg2.text, pg2.url);
+      if (f2.error) throw { diag: true, msg: 'تعذّر التحقق بعد الحفظ: ' + f2.error, log: log, body: '' };
+      var got = parseYMD(f2.expOld), want = parseYMD(newVal);
+      var same = !!(got && want && got.y === want.y && got.m === want.m && got.d === want.d);
+      var diffs = diffPairs(f.pairs, f2.pairs, f.expName);
+      pushLog({ u: user, from: f.expOld, to: newVal, t: Date.now(), ok: same });
+      if (!same) throw { diag: true, msg: 'لم يتأكد التغيير: الراديوس يعرض ' + (f2.expOld || '—') + ' بدل ' + newVal, log: log, body: visibleText(rr.text).slice(0, 600) };
+      if (!diffs.length) { try { localStorage.setItem(TESTED_KEY, '1'); } catch (_) {} }
+      var disp = fmtLike(row.Expiration, got);
+      if (disp) row.Expiration = disp;
+      if (window.__rdRerender) window.__rdRerender();
+      var cb = document.getElementById('modalCloseBtn2'); if (cb) cb.click();
+      rmToast();
+      if (diffs.length) {
+        var o = overlay('<b>✅ تم تعديل التاريخ</b><div style="color:#c60;margin-top:6px">⚠️ تغيّرت حقول أخرى بعد الحفظ (قد يكون هذا طبيعيًا)، راجعها في الراديوس:</div><pre>' + esc(diffs.join(', ')) + '</pre><button id="rdX" style="background:#ddd">حسنًا</button>');
+        o.querySelector('#rdX').onclick = function () { o.remove(); };
+      } else {
+        toast('✅ تم تغيير التاريخ إلى ' + newVal + ' في الراديوس', 4000);
+      }
+      setTimeout(refresh, 800);
+    } catch (e) { editFail(e, log); }
+  }
+  function editFail(e, log) {
+    rmToast();
+    if (e && e.diag) showDiag(e);
+    else showDiag({ msg: 'تعذّر تنفيذ التعديل: ' + (e && e.message ? e.message : JSON.stringify(e)), log: (log || []).concat(['آخر خطوة: ' + (window.__rdStep || '-')]), body: '' });
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('#rdEditExpBtn') : null;
+    if (b && window.__rdRow) { e.preventDefault(); editExpiry(window.__rdRow); }
+  });
+
+
+  /* اعتراض الضغط قبل سلوك الزر القديم */
+  var pressTimer = null, longPressed = false;
+  btn.addEventListener('touchstart', function () { longPressed = false; pressTimer = setTimeout(function () { longPressed = true; openSettings(); }, 700); }, { passive: true, capture: true });
+  ['touchend', 'touchmove', 'touchcancel'].forEach(function (ev) { btn.addEventListener(ev, function () { clearTimeout(pressTimer); }, { passive: true, capture: true }); });
+  btn.addEventListener('click', function (e) {
+    e.stopImmediatePropagation(); e.preventDefault();
+    if (longPressed) { longPressed = false; return; }
+    refresh();
+  }, true);
+})();
+</script>
+
+</body>
+</html>
