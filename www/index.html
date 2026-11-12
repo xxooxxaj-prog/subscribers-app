@@ -4,7 +4,39 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>عرض المشتركين - مع التسعير المتعدد 🇺🇸 🇹🇷 🇸🇾</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script>
+/* محلل CSV خفيف بديل عن PapaParse (لا يحتاج إنترنت) */
+window.Papa = { parse: function (text, opts) {
+  opts = opts || {};
+  text = String(text || '').replace(/^\uFEFF/, '');
+  var first = text.split(/\r?\n/).filter(function (l) { return l.trim() !== ''; })[0] || '';
+  var best = ',', bestN = -1;
+  [',', ';', '\t', '|'].forEach(function (d) {
+    var n = 0, q = false;
+    for (var i = 0; i < first.length; i++) { var ch = first.charAt(i); if (ch === '"') q = !q; else if (!q && ch === d) n++; }
+    if (n > bestN) { bestN = n; best = d; }
+  });
+  var rows = [], row = [], f = '', q = false, n = text.length;
+  for (var i = 0; i < n; i++) {
+    var ch = text.charAt(i);
+    if (q) { if (ch === '"') { if (text.charAt(i + 1) === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+    else if (ch === '"' && f === '') q = true;
+    else if (ch === best) { row.push(f); f = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text.charAt(i + 1) === '\n') i++; row.push(f); f = ''; rows.push(row); row = []; }
+    else f += ch;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  if (opts.skipEmptyLines) rows = rows.filter(function (r) { return !(r.length === 1 && String(r[0]).trim() === ''); });
+  var data = rows;
+  if (opts.header) {
+    var hdr = (rows.shift() || []).map(function (h) { return opts.transformHeader ? opts.transformHeader(h) : h; });
+    data = rows.map(function (r) { var o = {}; for (var k = 0; k < hdr.length; k++) { if (r[k] !== undefined) o[hdr[k]] = r[k]; } return o; });
+  }
+  var res = { data: data, errors: [], meta: { delimiter: best } };
+  if (opts.complete) opts.complete(res);
+  return res;
+} };
+</script>
   <style>
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { background: #f4f7fc; margin: 0; display: flex; justify-content: center; }
@@ -586,6 +618,7 @@
 
     <button class="icon-btn orange" id="openColumnsBtn" type="button" title="اختيار الأعمدة المعروضة">👁️</button>
     <button class="icon-btn red" id="exportNamesBtn" type="button" title="تصدير الأسماء">📤</button>
+    <button class="icon-btn green with-label" id="editPricesBtn" type="button" title="تعديل أسعار الباقات"><span class="btn-icon">💰</span><span class="btn-label">الأسعار</span></button>
 
     <span class="upload-divider"></span>
 
@@ -835,18 +868,19 @@
   const PRICES_FILENAME = 'Package-prices.json';
   const FAVORITES_FILENAME = 'favorites.json';
 
-  const FLAG_US = '<img src="https://flagcdn.com/w20/us.png" class="flag-icon" alt="US" loading="lazy">';
-  const FLAG_TR = '<img src="https://flagcdn.com/w20/tr.png" class="flag-icon" alt="TR" loading="lazy">';
-  const FLAG_SY = '<img src="https://flagcdn.com/w20/sy.png" class="flag-icon" alt="SY" loading="lazy">';
+  const FLAG_US = '🇺🇸';
+  const FLAG_TR = '🇹🇷';
+  const FLAG_SY = '🇸🇾';
 
+  const HIDDEN_COLS = ['Address', '🌐 IP', '📶 WiFi', '🔑 WiFi Pass', '🔐 Router Pass'];
   const DISPLAY_COLUMNS = [
-    'Expiration','Full Name' , 'Service', 'User name',
-    'Price $', 'Price 🇹🇷', 'Price 🇸🇾', 'Address',
+    'Expiration','Full Name' , 'Service',
+    'Price $', 'Price 🇹🇷', 'Price 🇸🇾', 'User name', 'Address',
     '🌐 IP', '📶 WiFi', '🔑 WiFi Pass', '🔐 Router Pass'
   ];
 
   const TOGGLEABLE_COLUMNS = [
-    ...DISPLAY_COLUMNS.map(c => ({ key: c, label: c === 'Full Name' ? '👤 Full Name' : c })),
+    ...DISPLAY_COLUMNS.filter(c => !HIDDEN_COLS.includes(c)).map(c => ({ key: c, label: c === 'Full Name' ? '👤 Full Name' : c })),
     { key: '_block', label: '🏠 حارة' },
     { key: '_house', label: '🏡 بيت' }
   ];
@@ -878,6 +912,7 @@
 
   let visibleColumns = {};
   TOGGLEABLE_COLUMNS.forEach(c => { visibleColumns[c.key] = true; });
+  HIDDEN_COLS.forEach(c => { visibleColumns[c] = false; });
 
   const COLUMN_MAPPING = {
     'اسم المستخدم': 'User name', 'الاسم الأول': 'First name',
@@ -889,12 +924,14 @@
 
   let allRows = [];
   let filteredRows = [];
+  let rowLimit = 100;
   let currentSort = { column: null, ascending: true };
   let defaultDateFromValue = '';
   let defaultDateToValue   = '';
 
   let dataDirHandle = null;
   const fsSupported = 'showDirectoryPicker' in window;
+  const IS_NATIVE_APP = (function () { try { var c = (window.top && window.top.Capacitor) || window.Capacitor; return !!(c && c.isNativePlatform && c.isNativePlatform()); } catch (_) { return false; } })();
 
   let dirInfo = { name: '', files: [], scannedAt: null, totalSize: 0 };
 
@@ -1974,6 +2011,62 @@
   })();
 
 
+  /* ===== تعديل أسعار الباقات ===== */
+  function openPricesEditor() {
+    const old = document.getElementById('pricesEditor'); if (old) old.remove();
+    const o = document.createElement('div');
+    o.id = 'pricesEditor';
+    o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9500;display:flex;align-items:center;justify-content:center;padding:12px;';
+    const inp = 'width:100%;box-sizing:border-box;padding:8px;border:1px solid #bbb;border-radius:8px;font-size:15px;direction:ltr;text-align:center;';
+    const btn = 'border:0;border-radius:8px;padding:10px 14px;font-size:15px;cursor:pointer;font-family:inherit;';
+    const rowHTML = (k, v) => '<tr>' +
+      '<td><input class="pe-k" style="' + inp + '" value="' + escapeHtml(k) + '" placeholder="مثال: 4M"></td>' +
+      '<td><input class="pe-usd" style="' + inp + '" inputmode="decimal" value="' + escapeHtml(v.usd) + '"></td>' +
+      '<td><input class="pe-tl" style="' + inp + '" inputmode="decimal" value="' + escapeHtml(v.tl) + '"></td>' +
+      '<td><input class="pe-sy" style="' + inp + '" inputmode="decimal" value="' + escapeHtml(v.sy) + '"></td>' +
+      '<td><button type="button" class="pe-del" style="' + btn + 'background:#fdecea;padding:8px 10px;">✕</button></td></tr>';
+    const keys = Object.keys(PRICE_MAP).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    o.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px;width:100%;max-width:560px;max-height:92vh;overflow:auto;direction:rtl;">' +
+      '<b style="font-size:17px;">💰 تعديل أسعار الباقات</b>' +
+      '<table style="width:100%;border-collapse:separate;border-spacing:4px;margin-top:10px;"><thead><tr><th>الباقة</th><th>🇺🇸 $</th><th>🇹🇷 ليرة</th><th>🇸🇾 ل.س</th><th></th></tr></thead><tbody id="peBody">' +
+      keys.map(k => rowHTML(k, PRICE_MAP[k] || {})).join('') + '</tbody></table>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+      '<button type="button" id="peAdd" style="' + btn + 'background:#e3f2fd;">➕ إضافة باقة</button>' +
+      '<button type="button" id="peSave" style="' + btn + 'background:#2e7d32;color:#fff;">💾 حفظ</button>' +
+      '<button type="button" id="peClose" style="' + btn + 'background:#ddd;">إغلاق</button></div></div>';
+    document.body.appendChild(o);
+    o.addEventListener('click', e => {
+      if (e.target.classList.contains('pe-del')) { const tr = e.target.closest('tr'); if (tr) tr.remove(); }
+    });
+    o.querySelector('#peAdd').onclick = () => {
+      o.querySelector('#peBody').insertAdjacentHTML('beforeend', rowHTML('', { usd: '', tl: '', sy: '' }));
+    };
+    o.querySelector('#peClose').onclick = () => o.remove();
+    o.querySelector('#peSave').onclick = async () => {
+      const nm = {}; let bad = '';
+      o.querySelectorAll('#peBody tr').forEach(tr => {
+        const raw = tr.querySelector('.pe-k').value.trim(); if (!raw) return;
+        const m = raw.match(/\d+/); if (!m) { bad = raw; return; }
+        const key = parseInt(m[0], 10) + 'M';
+        nm[key] = {
+          usd: formatPriceValue(tr.querySelector('.pe-usd').value.replace(/\$/g, '')),
+          tl: formatPriceValue(tr.querySelector('.pe-tl').value),
+          sy: formatPriceValue(tr.querySelector('.pe-sy').value)
+        };
+      });
+      if (bad) { showToast('⚠️ اسم باقة غير صالح: ' + bad, 'error'); return; }
+      if (!Object.keys(nm).length) { showToast('⚠️ أضف باقة واحدة على الأقل', 'error'); return; }
+      PRICE_MAP = nm;
+      try { await savePricesToBrowser(PRICE_MAP); } catch (_) {}
+      reapplyPrices();
+      applyFiltersAndSort();
+      o.remove();
+      showToast('✅ تم حفظ الأسعار');
+    };
+  }
+  (function () { const b = document.getElementById('editPricesBtn'); if (b) b.addEventListener('click', openPricesEditor); })();
+
+
   /* ========== منطق الأسعار ========== */
   function formatPriceValue(v) {
     if (v === null || v === undefined || v === '') return '';
@@ -2119,10 +2212,10 @@
       }
 
       const okCount = results.filter(r => r.status === 'ok').length;
-      if (okCount > 0) showToast(`✅ تم رفع ${okCount} من ${results.length} ملف بنجاح`, 'info');
+      if (okCount > 0) { if (!IS_NATIVE_APP) showToast(`✅ تم رفع ${okCount} من ${results.length} ملف بنجاح`, 'info'); }
       else showToast(`⚠️ لم يتم رفع أي ملف`, 'error');
 
-      showSmartUploadResults(results);
+      if (!IS_NATIVE_APP || results.some(r => r.status !== 'ok')) showSmartUploadResults(results);
     } catch (globalErr) {
       showToast('❌ حدث خطأ غير متوقع: ' + globalErr.message, 'error');
     } finally {
@@ -2197,15 +2290,18 @@
     try {
       const p = await loadPricesFromBrowser();
       if (p && typeof p === 'object') {
-        Object.keys(DEFAULT_PRICE_MAP).forEach(key => {
-          if (p[key]) {
-            PRICE_MAP[key] = {
-              usd: p[key].usd !== undefined ? p[key].usd : DEFAULT_PRICE_MAP[key].usd,
-              tl:  p[key].tl  !== undefined ? p[key].tl  : DEFAULT_PRICE_MAP[key].tl,
-              sy:  p[key].sy  !== undefined ? p[key].sy  : DEFAULT_PRICE_MAP[key].sy
-            };
-          }
+        const nm = {};
+        Object.keys(p).forEach(key => {
+          const v = (p[key] && typeof p[key] === 'object') ? p[key] : null;
+          if (!v) return;
+          const d = DEFAULT_PRICE_MAP[key] || { usd: '', tl: '', sy: '' };
+          nm[key] = {
+            usd: v.usd !== undefined ? v.usd : d.usd,
+            tl:  v.tl  !== undefined ? v.tl  : d.tl,
+            sy:  v.sy  !== undefined ? v.sy  : d.sy
+          };
         });
+        if (Object.keys(nm).length) PRICE_MAP = nm;
       }
     } catch (_) {}
     try {
@@ -2214,7 +2310,10 @@
     } catch (_) {}
     updateFavoritesChip();
 
-    if (!fsSupported) {
+    if (IS_NATIVE_APP) {
+      chipFolder.style.display = 'none';
+      const cw = document.getElementById('chip-wifi'); if (cw) cw.style.display = 'none';
+    } else if (!fsSupported) {
       connectFolderBtn.style.display = 'none';
       setChip(chipFolder, 'fail', '❌ متصفحك لا يدعم');
       showToast('⚠️ استخدم Chrome/Edge لربط المجلد', 'info');
@@ -2245,10 +2344,10 @@
           sourceInfo.users = { status: 'ok', source: 'db' };
           setChip(chipUsers, 'ok', `✅ users.csv (محفوظ)`);
         } else {
-          tableBody.innerHTML = `<tr><td colspan="${DISPLAY_COLUMNS.length + 3}" class="no-data">📄 اربط مجلد data (🔗) أو ارفع ملفات (📂)</td></tr>`;
+          tableBody.innerHTML = `<tr><td colspan="${DISPLAY_COLUMNS.length + 3}" class="no-data">${IS_NATIVE_APP ? '📄 اضغط 🔄 «تحديث من الراديوس» لجلب المشتركين' : '📄 اربط مجلد data (🔗) أو ارفع ملفات (📂)'}</td></tr>`;
         }
       } catch (_) {
-        tableBody.innerHTML = `<tr><td colspan="${DISPLAY_COLUMNS.length + 3}" class="no-data">📄 اربط مجلد data (🔗) أو ارفع ملفات (📂)</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="${DISPLAY_COLUMNS.length + 3}" class="no-data">${IS_NATIVE_APP ? '📄 اضغط 🔄 «تحديث من الراديوس» لجلب المشتركين' : '📄 اربط مجلد data (🔗) أو ارفع ملفات (📂)'}</td></tr>`;
       }
     }
 
@@ -2441,6 +2540,7 @@
       });
     }
 
+    rowLimit = 100;
     renderTable(filteredRows);
     resultsCount.textContent = `عرض ${filteredRows.length} من ${allRows.length}`;
     updateSearchBlinkState();
@@ -2502,7 +2602,8 @@
     }
 
     let bodyHTML = '';
-    rows.forEach((row, idx) => {
+    const shown = Math.min(rows.length, rowLimit);
+    rows.slice(0, shown).forEach((row, idx) => {
       const username = (row['User name'] || '').trim();
       const isFav = username && favorites[username] === true;
 
@@ -2563,7 +2664,7 @@
           else if (st === 'today') tdClass = 'exp-today';
           else if (st === 'future') tdClass = 'exp-future';
           else tdClass = 'exp-unknown';
-          val = `${em} ${escapeHtml(d)}`;
+          val = `${em} ${escapeHtml(String(d).replace(/\s+00:00:00$/, ''))}`;
         }
         else if (col === 'Full Name') {
           const fn = getFullName(row);
@@ -2593,7 +2694,15 @@
       if (visibleColumns['_house'] !== false) bodyHTML += `<td>${row._house !== null ? row._house : '-'}</td>`;
       bodyHTML += '</tr>';
     });
+    if (rows.length > shown) bodyHTML += `<tr class="more-row"><td colspan="${colSpan}" style="text-align:center;padding:12px;"><button type="button" id="moreRowsBtn" class="status-chip">⬇️ عرض المزيد (${rows.length - shown} متبقي)</button></td></tr>`;
     tableBody.innerHTML = bodyHTML;
+    const moreBtn = document.getElementById('moreRowsBtn');
+    if (moreBtn) {
+      moreBtn.onclick = function () { rowLimit += 200; renderTable(rows); };
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(function (en, ob) { if (en[0].isIntersecting) { ob.disconnect(); moreBtn.click(); } }, { rootMargin: '300px' }).observe(moreBtn);
+      }
+    }
   }
 
 
@@ -3230,7 +3339,7 @@
 
   /* الإقلاع */
   async function initFirstTime() {
-    if (!fsSupported) return;
+    if (!fsSupported || IS_NATIVE_APP) return;
     const handle = await loadDirHandleFromBrowser();
     if (!handle) setTimeout(openGuideModal, 800);
   }
@@ -3782,8 +3891,11 @@
   }
   document.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('#rdEditExpBtn') : null;
-    if (b && window.__rdRow) { e.preventDefault(); editExpiry(window.__rdRow); }
-  });
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    if (!window.__rdRow) { toast('افتح بيانات المشترك أولًا'); return; }
+    try { editExpiry(window.__rdRow).catch(function (err) { editFail(err, []); }); } catch (err) { editFail(err, []); }
+  }, true);
 
 
   /* اعتراض الضغط قبل سلوك الزر القديم */
