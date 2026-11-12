@@ -593,6 +593,7 @@ window.Papa = { parse: function (text, opts) {
   .status-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 4px;}
   .status-chip{border:1px solid #cdd6e4;background:#fff;border-radius:16px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit;color:#2b2d42;}
   .status-chip.active{background:#2a7de1;color:#fff;border-color:#2a7de1;}
+  .on-dot{font-size:11px;margin:0 2px;}
   .status-last{font-size:12px;color:#667;margin-right:auto;}
 </style>
 </head>
@@ -619,6 +620,7 @@ window.Papa = { parse: function (text, opts) {
     <button class="icon-btn orange" id="openColumnsBtn" type="button" title="اختيار الأعمدة المعروضة">👁️</button>
     <button class="icon-btn red" id="exportNamesBtn" type="button" title="تصدير الأسماء">📤</button>
     <button class="icon-btn green with-label" id="editPricesBtn" type="button" title="تعديل أسعار الباقات"><span class="btn-icon">💰</span><span class="btn-label">الأسعار</span></button>
+    <button class="icon-btn blue with-label" id="onlineBtn" type="button" style="display:none" title="جلب حالة الاتصال (متصل / غير متصل) من الراديوس"><span class="btn-icon">📡</span><span class="btn-label">المتصلون</span></button>
 
     <span class="upload-divider"></span>
 
@@ -1986,19 +1988,22 @@ window.Papa = { parse: function (text, opts) {
       const diff = Math.round((getDateValue(row.Expiration) - t0.getTime()) / 86400000);
       if (diff <= 3) ks.push('soon');
     }
+    if (window.__onlineSet) ks.push(window.__onlineSet[String(row['User name'] || '').trim().toLowerCase()] ? 'online' : 'offline');
     return ks;
   }
   window.__rdMatchStatus = function (row) { return rdStatusKeys(row).indexOf(window.__statusFilter) !== -1; };
   window.__rdChips = function () {
     const box = document.getElementById('statusChips'); if (!box) return;
-    const counts = { all: allRows.length, today: 0, soon: 0, past: 0, future: 0 };
+    const counts = { all: allRows.length, today: 0, soon: 0, past: 0, future: 0, online: 0, offline: 0 };
     allRows.forEach(r => rdStatusKeys(r).forEach(k => { counts[k]++; }));
-    const defs = [['all', 'الكل'], ['today', '🟠 ينتهي اليوم'], ['soon', '⏳ خلال 3 أيام'], ['past', '🔴 منتهي'], ['future', '🟢 فعّال']];
+    const defs = [['all', 'الكل'], ['today', '🟠 ينتهي اليوم'], ['soon', '⏳ خلال 3 أيام'], ['past', '🔴 منتهي'], ['future', '✅ فعّال']];
+    if (window.__onlineSet) defs.push(['online', '🟢 متصل الآن'], ['offline', '⚫ غير متصل']);
     let html = defs.map(d => `<button type="button" class="status-chip${window.__statusFilter === d[0] ? ' active' : ''}" data-k="${d[0]}">${d[1]} <b>${counts[d[0]]}</b></button>`).join('');
     try {
       const t = parseInt(localStorage.getItem('rdLastRefresh') || '0', 10);
       if (t) { const d = new Date(t); html += `<span class="status-last">🔄 آخر تحديث: ${d.getDate()}/${d.getMonth() + 1} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}</span>`; }
     } catch (_) {}
+    if (window.__onlineAt) { const o = new Date(window.__onlineAt); html += `<span class="status-last">📡 فحص الاتصال: ${o.getHours()}:${String(o.getMinutes()).padStart(2, '0')}</span>`; }
     box.innerHTML = html;
   };
   (function () {
@@ -2065,6 +2070,22 @@ window.Papa = { parse: function (text, opts) {
     };
   }
   (function () { const b = document.getElementById('editPricesBtn'); if (b) b.addEventListener('click', openPricesEditor); })();
+
+
+  /* ===== أيقونة حالة الاتصال بجانب الاسم ===== */
+  function rdOnlineDot(u) {
+    if (!window.__onlineSet) return '';
+    return window.__onlineSet[String(u || '').trim().toLowerCase()]
+      ? '<span class="on-dot on" title="متصل الآن">🟢</span>'
+      : '<span class="on-dot off" title="غير متصل">⚫</span>';
+  }
+  window.__rdApplyOnline = function (list) {
+    const set = {};
+    (list || []).forEach(u => { set[String(u).trim().toLowerCase()] = 1; });
+    window.__onlineSet = set;
+    window.__onlineAt = Date.now();
+    applyFiltersAndSort();
+  };
 
 
   /* ========== منطق الأسعار ========== */
@@ -2673,7 +2694,7 @@ window.Papa = { parse: function (text, opts) {
           val = (username && username !== '-'
                   ? `<button type="button" class="fav-btn ${isFav ? 'active' : ''}" data-username="${escapeHtml(username)}" title="${favTitle}">${favIcon}</button>`
                   : '') +
-                `<span class="clickable-name" title="انقر لعرض التفاصيل">${escapeHtml(fn)}</span>`;
+                rdOnlineDot(username) + `<span class="clickable-name" title="انقر لعرض التفاصيل">${escapeHtml(fn)}</span>`;
           tdClass = 'td-fullname';
         }
         else if (col === 'User name') {
@@ -3631,6 +3652,7 @@ window.Papa = { parse: function (text, opts) {
       input.dispatchEvent(new Event('change', { bubbles: true }));
       clearTimeout(wd);
       toast('✅ تم التحديث من الراديوس', 4000);
+      try { var ores = await fetchOnline(c, jar, log); if (window.__rdApplyOnline) window.__rdApplyOnline(ores.users); } catch (_) {}
     } catch (e) {
       clearTimeout(wd);
       try { alert('خطأ: ' + (e && (e.msg || e.message) ? (e.msg || e.message) : JSON.stringify(e)) + '\n' + log.join('\n') + '\nآخر خطوة: ' + (window.__rdStep || '-')); } catch (_) {}
@@ -3896,6 +3918,94 @@ window.Papa = { parse: function (text, opts) {
     if (!window.__rdRow) { toast('افتح بيانات المشترك أولًا'); return; }
     try { editExpiry(window.__rdRow).catch(function (err) { editFail(err, []); }); } catch (err) { editFail(err, []); }
   }, true);
+
+
+  /* ===== حالة الاتصال: المتصلون الآن من الراديوس ===== */
+  var ONLINE_CANDIDATES = ['?cont=online_users', '?cont=onlineusers', '?cont=online', '?cont=show_online', '?cont=list_online', '?cont=sessions'];
+  function parseOnline(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var set = {}, tableFound = false;
+    Array.prototype.forEach.call(doc.querySelectorAll('a[href*="username="]'), function (a) {
+      var m = (a.getAttribute('href') || '').match(/[?&]username=([^&#]+)/);
+      if (m) { try { var u = decodeURIComponent(m[1].replace(/\+/g, ' ')).trim().toLowerCase(); if (u) set[u] = 1; } catch (_) {} }
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll('table'), function (t) {
+      var rows = Array.prototype.slice.call(t.querySelectorAll('tr'));
+      if (rows.length < 1) return;
+      var hi = -1, idx = -1;
+      for (var r = 0; r < Math.min(3, rows.length) && idx < 0; r++) {
+        var cells = Array.prototype.slice.call(rows[r].children);
+        var k = -1;
+        for (var j = 0; j < cells.length; j++) { if (/^(user\s*name|username|user|login|اسم المستخدم|المستخدم)/i.test(cells[j].textContent.trim())) { k = j; break; } }
+        if (k >= 0) { idx = k; hi = r; }
+      }
+      if (idx < 0) return;
+      tableFound = true;
+      for (var i = hi + 1; i < rows.length; i++) {
+        var cell = rows[i].children[idx]; if (!cell) continue;
+        var u = cell.textContent.trim().toLowerCase();
+        if (u && !/\s/.test(u) && u.length < 64) set[u] = 1;
+      }
+    });
+    var text = (doc.body ? doc.body.textContent : '') || '';
+    return { users: Object.keys(set), tableFound: tableFound, emptyMsg: /no\s+(online\s+)?(users|sessions)|لا\s*يوجد/i.test(text), mentionsOnline: /online|متصل/i.test(text) };
+  }
+  async function fetchOnline(c, jar, log) {
+    var urls = (c.onlineUrl ? [c.onlineUrl] : []).concat(ONLINE_CANDIDATES.map(function (x) { return c.base + x; }));
+    var seen = {}, i, r, p;
+    function accept(r, u) {
+      if (r.status >= 400 || loginFields(r.text, r.url, c)) return null;
+      p = parseOnline(r.text);
+      if (p.users.length > 0 || p.tableFound || (p.emptyMsg && p.mentionsOnline)) return { users: p.users, url: u };
+      return null;
+    }
+    for (i = 0; i < urls.length; i++) {
+      if (seen[urls[i]]) continue; seen[urls[i]] = 1;
+      r = await req(urls[i], 'GET', null, jar);
+      log.push('online ' + urls[i].replace(c.base, '') + ': ' + r.status + ' len=' + r.text.length);
+      var a = accept(r, urls[i]);
+      if (a) { if (c.onlineUrl !== a.url) { var cs = cfg(); cs.onlineUrl = a.url; saveCfg(cs); } return a; }
+    }
+    /* اكتشاف: روابط القائمة التي تحوي كلمة online/متصل */
+    var home = await req(c.base, 'GET', null, jar), links = [];
+    try {
+      var d = new DOMParser().parseFromString(home.text, 'text/html');
+      Array.prototype.forEach.call(d.querySelectorAll('a[href]'), function (el) {
+        var t = el.textContent.trim(), h = el.getAttribute('href') || '';
+        if (/online|متصل|sessions|الجلسات/i.test(t) || /online|sessions/i.test(h)) {
+          try { var full = new URL(h, home.url || c.base).href; if (!seen[full] && !/delete|kill|disconnect|logout|remove|clear|reset/i.test(full + ' ' + t)) { seen[full] = 1; links.push({ u: full, t: t }); } } catch (_) {}
+        }
+      });
+    } catch (_) {}
+    for (i = 0; i < links.length && i < 6; i++) {
+      r = await req(links[i].u, 'GET', null, jar);
+      log.push('online? ' + links[i].t + ' -> ' + links[i].u.replace(c.base, '') + ': ' + r.status);
+      var b = accept(r, links[i].u);
+      if (b) { var cs2 = cfg(); cs2.onlineUrl = b.url; saveCfg(cs2); return b; }
+    }
+    throw { diag: true, msg: 'لم أجد صفحة المتصلين في الراديوس. أرسل لي هذه المعلومات.', log: log, body: 'LINKS: ' + links.map(function (l) { return l.t + ' -> ' + l.u.replace(c.base, ''); }).join(' ; ') };
+  }
+  async function refreshOnline() {
+    var c = cfg();
+    if (!c.user || !c.pass) { openSettings('أدخل اسم المستخدم وكلمة السر أولًا'); return; }
+    var jar = {}, log = [];
+    try {
+      toast('⏳ جاري جلب المتصلين...', 90000);
+      await rdLogin(c, jar, log);
+      var res = await fetchOnline(c, jar, log);
+      if (window.__rdApplyOnline) window.__rdApplyOnline(res.users);
+      rmToast();
+      toast('📡 المتصلون الآن: ' + res.users.length, 4000);
+    } catch (e) {
+      rmToast();
+      if (e && e.diag) showDiag(e);
+      else showDiag({ msg: 'تعذّر جلب المتصلين: ' + (e && e.message ? e.message : JSON.stringify(e)), log: log, body: '' });
+    }
+  }
+  (function () {
+    var ob = document.getElementById('onlineBtn');
+    if (ob) { ob.style.display = 'inline-flex'; ob.addEventListener('click', function () { refreshOnline(); }); }
+  })();
 
 
   /* اعتراض الضغط قبل سلوك الزر القديم */
