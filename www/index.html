@@ -594,6 +594,10 @@ window.Papa = { parse: function (text, opts) {
   .status-chip{border:1px solid #cdd6e4;background:#fff;border-radius:16px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit;color:#2b2d42;}
   .status-chip.active{background:#2a7de1;color:#fff;border-color:#2a7de1;}
   .on-dot{font-size:11px;margin:0 2px;}
+  .cur-ip{font-family:monospace;font-size:12px;direction:ltr;unicode-bidi:embed;}
+  .cur-ip.none{color:#aab;}
+  th.col-curip{width:1%;white-space:nowrap;}
+  .native-app #saveStatus,.native-app #saveAllBtn,.native-app #chip-folder,.native-app #chip-users,.native-app #chip-wifi,.native-app #chip-prices,.native-app #reloadAutoBtn{display:none !important;}
   .status-last{font-size:12px;color:#667;margin-right:auto;}
 </style>
 </head>
@@ -621,6 +625,7 @@ window.Papa = { parse: function (text, opts) {
     <button class="icon-btn red" id="exportNamesBtn" type="button" title="تصدير الأسماء">📤</button>
     <button class="icon-btn green with-label" id="editPricesBtn" type="button" title="تعديل أسعار الباقات"><span class="btn-icon">💰</span><span class="btn-label">الأسعار</span></button>
     <button class="icon-btn blue with-label" id="onlineBtn" type="button" style="display:none" title="جلب حالة الاتصال (متصل / غير متصل) من الراديوس"><span class="btn-icon">📡</span><span class="btn-label">المتصلون</span></button>
+    <button class="icon-btn gray with-label" id="logBtn" type="button" style="display:none" title="سجل التعديلات على المشتركين"><span class="btn-icon">📜</span><span class="btn-label">السجل</span></button>
 
     <span class="upload-divider"></span>
 
@@ -877,7 +882,7 @@ window.Papa = { parse: function (text, opts) {
   const HIDDEN_COLS = ['Address', '🌐 IP', '📶 WiFi', '🔑 WiFi Pass', '🔐 Router Pass'];
   const DISPLAY_COLUMNS = [
     'Expiration','Full Name' , 'Service',
-    'Price $', 'Price 🇹🇷', 'Price 🇸🇾', 'User name', 'Address',
+    'Price $', 'Price 🇹🇷', 'Price 🇸🇾', 'User name', 'Current IP', 'Address',
     '🌐 IP', '📶 WiFi', '🔑 WiFi Pass', '🔐 Router Pass'
   ];
 
@@ -934,6 +939,7 @@ window.Papa = { parse: function (text, opts) {
   let dataDirHandle = null;
   const fsSupported = 'showDirectoryPicker' in window;
   const IS_NATIVE_APP = (function () { try { var c = (window.top && window.top.Capacitor) || window.Capacitor; return !!(c && c.isNativePlatform && c.isNativePlatform()); } catch (_) { return false; } })();
+  if (IS_NATIVE_APP) document.documentElement.classList.add('native-app');
 
   let dirInfo = { name: '', files: [], scannedAt: null, totalSize: 0 };
 
@@ -1359,6 +1365,7 @@ window.Papa = { parse: function (text, opts) {
   }
 
   function showToast(msg, type) {
+    if (IS_NATIVE_APP && msg) { msg = String(msg).replace(/المتصفح/g, 'التطبيق'); if (/^(⭐ تم حفظ \d+ مفضل|✅ محفوظ|⭐ محفوظ)/.test(msg)) return; }
     copyToast.textContent = msg || '✅ تم النسخ';
     copyToast.className = 'copy-toast ' + (type || '');
     copyToast.classList.add('show');
@@ -2079,12 +2086,18 @@ window.Papa = { parse: function (text, opts) {
       ? '<span class="on-dot on" title="متصل الآن">🟢</span>'
       : '<span class="on-dot off" title="غير متصل">⚫</span>';
   }
-  window.__rdApplyOnline = function (list) {
-    const set = {};
+  window.__rdApplyOnline = function (list, ips) {
+    const set = {}, ipm = {};
     (list || []).forEach(u => { set[String(u).trim().toLowerCase()] = 1; });
+    Object.keys(ips || {}).forEach(k => { ipm[String(k).trim().toLowerCase()] = ips[k]; });
     window.__onlineSet = set;
+    window.__onlineIp = ipm;
     window.__onlineAt = Date.now();
     applyFiltersAndSort();
+  };
+  window.__rdFindRow = function (u) {
+    const t = String(u || '').trim().toLowerCase();
+    return allRows.find(r => String(r['User name'] || '').trim().toLowerCase() === t) || null;
   };
 
 
@@ -2479,6 +2492,15 @@ window.Papa = { parse: function (text, opts) {
   }
 
   function applyFiltersAndSort() {
+    if (window.__onlineSet) allRows.forEach(r => {
+      const u = String(r['User name'] || '').trim().toLowerCase();
+      const ip = (window.__onlineIp && window.__onlineIp[u]) || '';
+      if (r['Current IP'] !== ip) {
+        r['Current IP'] = ip;
+        const ex = [r._extraIP, r._extraWifi, r._extraWifiPass, r._extraRouterPass].filter(v => v && String(v).trim() !== '').join(' ');
+        r._allText = ((r._baseAllText || '') + ' ' + ex + ' ' + ip).toLowerCase();
+      }
+    });
     const globalTerm = globalSearch.value.trim().toLowerCase();
     const blockVal = blockSearch.value.trim();
     const houseVal = houseSearch.value.trim();
@@ -2590,6 +2612,7 @@ window.Papa = { parse: function (text, opts) {
       else if (col === 'Price 🇸🇾') cls = 'col-pricesp';
       else if (col === 'Address') cls = 'col-address';
       else if (col === '🌐 IP') cls = 'col-ip';
+      else if (col === 'Current IP') cls = 'col-curip';
       else if (col === '📶 WiFi') cls = 'col-wifi';
       else if (col === '🔑 WiFi Pass') cls = 'col-wifipass';
       else if (col === '🔐 Router Pass') cls = 'col-routerpass';
@@ -2706,6 +2729,10 @@ window.Papa = { parse: function (text, opts) {
               <button type="button" class="copy-username-btn" data-username="${escapeHtml(un)}" title="نسخ">📋</button>
             </span>`;
           } else val = '-';
+        }
+        else if (col === 'Current IP') {
+          const cip = String(row['Current IP'] || '').trim();
+          val = cip ? `<span class="cur-ip" dir="ltr">${escapeHtml(cip)}</span>` : '<span class="cur-ip none">—</span>';
         }
         else val = escapeHtml(row[col] || '');
 
@@ -2849,7 +2876,7 @@ window.Papa = { parse: function (text, opts) {
           <span style="color:#c62828;font-weight:700;">🇹🇷 ${escapeHtml(tl)}</span> |
           <span style="color:#6a1b9a;font-weight:700;">🇸🇾 ${escapeHtml(sy)}</span>
         </p>
-        ${window.__rdNative ? '<p class="section-gap"><button type="button" id="rdEditExpBtn" style="background:#2a7de1;color:#fff;border:0;border-radius:8px;padding:10px 14px;font-size:15px;cursor:pointer;">✏️ تعديل تاريخ الانتهاء في الراديوس</button></p>' : ''}
+        ${window.__rdNative ? '<p class="section-gap"><button type="button" id="rdEditExpBtn" style="background:#2a7de1;color:#fff;border:0;border-radius:8px;padding:10px 14px;font-size:15px;cursor:pointer;">✏️ تعديل المشترك في الراديوس</button></p>' : ''}
       </div>`;
     modalOverlay.classList.add('active');
     document.body.style.overflow = 'hidden';
@@ -3652,7 +3679,7 @@ window.Papa = { parse: function (text, opts) {
       input.dispatchEvent(new Event('change', { bubbles: true }));
       clearTimeout(wd);
       toast('✅ تم التحديث من الراديوس', 4000);
-      try { var ores = await fetchOnline(c, jar, log); if (window.__rdApplyOnline) window.__rdApplyOnline(ores.users); } catch (_) {}
+      try { var ores = await fetchOnline(c, jar, log); if (window.__rdApplyOnline) window.__rdApplyOnline(ores.users, ores.ips); } catch (_) {}
     } catch (e) {
       clearTimeout(wd);
       try { alert('خطأ: ' + (e && (e.msg || e.message) ? (e.msg || e.message) : JSON.stringify(e)) + '\n' + log.join('\n') + '\nآخر خطوة: ' + (window.__rdStep || '-')); } catch (_) {}
@@ -3689,7 +3716,7 @@ window.Papa = { parse: function (text, opts) {
     };
   }
 
-  /* ===== تعديل تاريخ الانتهاء في الراديوس (يعمل داخل التطبيق فقط) ===== */
+  /* ===== تعديل المشترك في الراديوس (التاريخ والباقة وأي حقل) + سجل التعديلات ===== */
   window.__rdNative = true;
   var LOG_KEY = 'rdExpLog', TESTED_KEY = 'rdExpTested';
   function pairsEnc(pairs) { return pairs.map(function (p) { return encodeURIComponent(p[0]) + '=' + encodeURIComponent(p[1]); }).join('&'); }
@@ -3717,9 +3744,11 @@ window.Papa = { parse: function (text, opts) {
   function todayP() { var t = new Date(); return { y: t.getFullYear(), m: t.getMonth() + 1, d: t.getDate() }; }
   function dateInputP(v) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ''); return m ? { y: +m[1], m: +m[2], d: +m[3] } : null; }
   function readLog() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (_) { return []; } }
-  function pushLog(e) { try { var a = readLog(); a.push(e); localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(-100))); } catch (_) {} }
-  function fmtTs(t) { var d = new Date(t); return d.getDate() + '/' + (d.getMonth() + 1) + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function pushLogs(list) { try { var a = readLog().concat(list); localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(-300))); } catch (_) {} }
+  function fmtHM(t) { var d = new Date(t); return d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function fmtDay(t) { var d = new Date(t); return d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear(); }
   function rmToast() { var t = document.getElementById('rdToast'); if (t) t.remove(); }
+  function clone(x) { return JSON.parse(JSON.stringify(x)); }
 
   async function rdLogin(c, jar, log) {
     var p = await req(c.base, 'GET', null, jar);
@@ -3743,142 +3772,232 @@ window.Papa = { parse: function (text, opts) {
     if (!ok) throw { diag: true, msg: 'فشل تسجيل الدخول: تحقق من الاسم وكلمة السر', log: log, body: '' };
   }
 
-  /* قراءة نموذج تعديل المشترك كما هو، دون افتراض أسماء حقول ثابتة */
+  /* ---------- قراءة نموذج تعديل المشترك كما هو (دون افتراض أسماء ثابتة) ---------- */
+  function labelOf(el) {
+    try {
+      var doc = el.ownerDocument, id = el.getAttribute('id'), lb = null;
+      if (id) { var all = doc.getElementsByTagName('label'); for (var i = 0; i < all.length; i++) { if (all[i].getAttribute('for') === id) { lb = all[i]; break; } } }
+      if (!lb && el.closest) lb = el.closest('label');
+      var t = lb ? lb.textContent.replace(/\s+/g, ' ').trim() : '';
+      if (!t || t.length > 40) { t = ''; var cell = el.closest ? el.closest('td,th') : null; var ps = cell && cell.previousElementSibling; if (ps) t = ps.textContent.replace(/\s+/g, ' ').trim(); }
+      t = t.replace(/[:：*]+\s*$/, '').trim();
+      if (t && t.length <= 40) return t;
+    } catch (_) {}
+    return el.getAttribute('title') || el.getAttribute('name') || '';
+  }
   function collectForm(html, pageUrl) {
     var doc = new DOMParser().parseFromString(html, 'text/html');
     var forms = Array.prototype.slice.call(doc.querySelectorAll('form'));
-    var form = null, expEl = null, names = [];
+    var form = null, names = [];
     for (var i = 0; i < forms.length; i++) {
-      var els = forms[i].querySelectorAll('input,select,textarea');
-      var cand = null;
-      for (var j = 0; j < els.length; j++) {
-        var nm = els[j].getAttribute('name') || '';
-        if (nm) names.push(nm);
-        if (/^expiration$/i.test(nm)) { cand = els[j]; }
-        else if (!cand && /expir/i.test(nm)) { cand = els[j]; }
-      }
-      if (cand && !form) { form = forms[i]; expEl = cand; }
+      var els = forms[i].querySelectorAll('input,select,textarea'), has = false;
+      for (var j = 0; j < els.length; j++) { var nm0 = els[j].getAttribute('name') || ''; if (nm0) names.push(nm0); if (/expir/i.test(nm0)) has = true; }
+      if (has && !form) form = forms[i];
     }
     if (!form) return { error: 'لم أجد حقل تاريخ الانتهاء في صفحة التعديل', names: names };
-    if (expEl.tagName.toLowerCase() !== 'input') return { error: 'حقل الانتهاء ليس من نوع إدخال نصي', names: names };
-    var pairs = [], submits = [];
+    var fields = [], radios = {}, submits = [];
     Array.prototype.forEach.call(form.querySelectorAll('input,select,textarea,button'), function (el) {
-      var nm = el.getAttribute('name');
-      var tag = el.tagName.toLowerCase();
+      var nm = el.getAttribute('name'), tag = el.tagName.toLowerCase();
       var ty = (el.getAttribute('type') || (tag === 'button' ? 'submit' : 'text')).toLowerCase();
       if (el.hasAttribute('disabled')) return;
       if (ty === 'submit' || ty === 'image') { submits.push(el); return; }
       if (!nm || ty === 'button' || ty === 'reset' || ty === 'file') return;
+      var lab = labelOf(el);
       if (tag === 'select') {
-        var opts = Array.prototype.slice.call(el.querySelectorAll('option'));
-        var sel = opts.filter(function (o) { return o.hasAttribute('selected'); });
-        if (!sel.length && !el.hasAttribute('multiple') && opts.length) sel = [opts[0]];
-        sel.forEach(function (o) { pairs.push([nm, o.hasAttribute('value') ? o.getAttribute('value') : o.textContent.trim()]); });
+        var opts = Array.prototype.slice.call(el.querySelectorAll('option')).map(function (o) {
+          return { v: o.hasAttribute('value') ? o.getAttribute('value') : o.textContent.trim(), t: o.textContent.replace(/\s+/g, ' ').trim(), sel: o.hasAttribute('selected') };
+        });
+        var multi = el.hasAttribute('multiple');
+        if (!multi && opts.length && !opts.some(function (o) { return o.sel; })) opts[0].sel = true;
+        fields.push({ kind: 'select', name: nm, label: lab, multi: multi, options: opts, value: opts.filter(function (o) { return o.sel; }).map(function (o) { return o.v; }) });
       } else if (tag === 'textarea') {
-        pairs.push([nm, el.textContent]);
-      } else if (ty === 'checkbox' || ty === 'radio') {
-        if (el.hasAttribute('checked')) pairs.push([nm, el.hasAttribute('value') ? el.getAttribute('value') : 'on']);
+        fields.push({ kind: 'textarea', name: nm, label: lab, value: el.textContent });
+      } else if (ty === 'hidden') {
+        fields.push({ kind: 'hidden', name: nm, value: el.getAttribute('value') || '' });
+      } else if (ty === 'password') {
+        fields.push({ kind: 'secret', name: nm, value: el.getAttribute('value') || '' });
+      } else if (ty === 'checkbox') {
+        fields.push({ kind: 'checkbox', name: nm, label: lab, cval: el.hasAttribute('value') ? el.getAttribute('value') : 'on', checked: el.hasAttribute('checked') });
+      } else if (ty === 'radio') {
+        var rv = el.hasAttribute('value') ? el.getAttribute('value') : 'on', g = radios[nm];
+        if (!g) { g = { kind: 'radio', name: nm, label: lab, options: [], value: [''] }; radios[nm] = g; fields.push(g); }
+        var rl = el.parentNode && el.parentNode.textContent ? el.parentNode.textContent.replace(/\s+/g, ' ').trim().slice(0, 30) : rv;
+        g.options.push({ v: rv, t: rl || rv, sel: el.hasAttribute('checked') });
+        if (el.hasAttribute('checked')) g.value = [rv];
       } else {
-        pairs.push([nm, el.getAttribute('value') || '']);
+        fields.push({ kind: 'text', name: nm, label: lab, value: el.getAttribute('value') || '' });
       }
     });
+    var exp = null;
+    fields.forEach(function (x) { if (x.kind === 'text' && /^expiration$/i.test(x.name)) exp = x; });
+    if (!exp) fields.forEach(function (x) { if (!exp && x.kind === 'text' && /expir/i.test(x.name)) exp = x; });
+    if (!exp) return { error: 'حقل الانتهاء موجود لكنه ليس حقل نص قابلًا للتعديل', names: names };
     /* اختيار زر الحفظ بحذر: لا نضغط أي زر اسمه حذف/مسح/إلغاء */
     var bad = /delete|remove|\bdel\b|reset|clear|cancel|disable|حذف|مسح|إلغاء/i;
     var good = /save|update|submit|apply|edit|ok|حفظ|تعديل|تحديث/i;
     var descs = submits.map(function (s) { return (s.getAttribute('name') || '') + ' ' + (s.getAttribute('value') || '') + ' ' + (s.textContent || ''); });
     var okIdx = [];
-    descs.forEach(function (t, i) { if (!bad.test(t)) okIdx.push(i); });
+    descs.forEach(function (t, k) { if (!bad.test(t)) okIdx.push(k); });
     var submit = null;
     if (submits.length) {
       var pick = null;
       if (okIdx.length === 1) pick = okIdx[0];
-      else {
-        var g = okIdx.filter(function (i) { return good.test(descs[i]); });
-        if (g.length === 1) pick = g[0];
-      }
+      else { var gd = okIdx.filter(function (k) { return good.test(descs[k]); }); if (gd.length === 1) pick = gd[0]; }
       if (pick === null) return { error: 'تعذّر تحديد زر الحفظ بأمان في صفحة التعديل', names: descs };
       var sb = submits[pick];
       if (sb.getAttribute('name')) submit = [sb.getAttribute('name'), sb.getAttribute('value') || ''];
     }
-    var method = (form.getAttribute('method') || 'get').toUpperCase();
-    var action = new URL(form.getAttribute('action') || pageUrl, pageUrl).href;
-    return { action: action, method: method, pairs: pairs, submit: submit, expName: expEl.getAttribute('name'), expOld: expEl.getAttribute('value') || '' };
+    return { action: new URL(form.getAttribute('action') || pageUrl, pageUrl).href, method: (form.getAttribute('method') || 'get').toUpperCase(), fields: fields, expName: exp.name, submit: submit };
   }
-  function pairMap(pairs, skip) { var m = {}; pairs.forEach(function (p) { if (p[0] === skip) return; (m[p[0]] = m[p[0]] || []).push(p[1]); }); return m; }
-  function diffPairs(a, b, skip) {
-    var ma = pairMap(a, skip), mb = pairMap(b, skip), keys = {}, out = [];
-    Object.keys(ma).concat(Object.keys(mb)).forEach(function (k) { keys[k] = 1; });
-    Object.keys(keys).forEach(function (k) { if ((ma[k] || []).join('|') !== (mb[k] || []).join('|')) out.push(k); });
+  function toPairs(fields) {
+    var p = [];
+    fields.forEach(function (f) {
+      if (f.kind === 'checkbox') { if (f.checked) p.push([f.name, f.cval]); }
+      else if (f.kind === 'select' || f.kind === 'radio') { (f.value || []).forEach(function (v) { if (!(f.kind === 'radio' && v === '')) p.push([f.name, v]); }); }
+      else p.push([f.name, f.value == null ? '' : String(f.value)]);
+    });
+    return p;
+  }
+  function rawOf(f) {
+    if (f.kind === 'checkbox') return f.checked ? '1' : '0';
+    if (f.kind === 'select' || f.kind === 'radio') return (f.value || []).join('\u0001');
+    return String(f.value == null ? '' : f.value);
+  }
+  function textOf(f) {
+    if (f.kind === 'checkbox') return f.checked ? 'مفعّل' : 'غير مفعّل';
+    if (f.kind === 'select' || f.kind === 'radio') {
+      return (f.value || []).map(function (v) { var o = (f.options || []).filter(function (x) { return x.v === v; })[0]; return o ? o.t : v; }).join('، ') || '—';
+    }
+    return String(f.value == null ? '' : f.value) || '—';
+  }
+  function sameVal(f, a, b, expName) {
+    if (f.name === expName) { var pa = parseYMD(a), pb = parseYMD(b); if (pa && pb) return pa.y === pb.y && pa.m === pb.m && pa.d === pb.d; }
+    return String(a).trim() === String(b).trim();
+  }
+  function findField(fields, w) {
+    for (var i = 0; i < fields.length; i++) { if (fields[i].name === w.name && fields[i].kind === w.kind && (w.kind !== 'checkbox' || fields[i].cval === w.cval)) return fields[i]; }
+    return null;
+  }
+  function diffFields(oldF, newF, expName) {
+    var out = [];
+    oldF.forEach(function (f, i) {
+      if (f.kind === 'hidden' || f.kind === 'secret') return;
+      if (!sameVal(f, rawOf(f), rawOf(newF[i]), expName)) out.push({ i: i, label: f.label || f.name });
+    });
     return out;
   }
 
-  async function editExpiry(row) {
+  /* ---------- نافذة التعديل ---------- */
+  async function editSubscriber(row, preset) {
     var user = String(row['User name'] || '').trim();
     if (!user || user === '-') { toast('لا يوجد اسم مستخدم لهذا المشترك'); return; }
     var c = cfg();
     if (!c.user || !c.pass) { openSettings('أدخل اسم المستخدم وكلمة السر أولًا'); return; }
-    var curP = parseYMD(row.Expiration);
-    var hist = readLog().filter(function (e) { return e.u === user; }).slice(-4).reverse();
-    var histHtml = hist.length ? '<div style="margin-top:10px;font-size:12px;color:#555"><b>آخر التعديلات:</b>' + hist.map(function (e) {
-      return '<div>' + esc(fmtTs(e.t)) + ' · من <span dir="ltr">' + esc(e.from) + '</span> إلى <span dir="ltr">' + esc(e.to) + '</span>' + (e.ok ? ' ✓' : ' ✗') +
-        (e.from && parseYMD(e.from) ? ' <a href="#" data-back="' + esc(e.from) + '">↩ تراجع</a>' : '') + '</div>';
-    }).join('') + '</div>' : '';
-    var o = overlay('<b>✏️ تعديل تاريخ الانتهاء</b>' +
-      '<div style="margin-top:8px">👤 ' + esc(window.__rdRowName || user) + ' <span dir="ltr">(' + esc(user) + ')</span></div>' +
-      '<div>📅 الحالي: <b dir="ltr">' + esc(row.Expiration || '—') + '</b></div>' +
-      '<label>التاريخ الجديد</label><input id="rdNewDate" type="date" value="' + isoOf(curP || todayP()) + '">' +
-      '<div><button id="rdP30e" style="background:#e3f2fd">+30 يوم من الانتهاء</button><button id="rdP30t" style="background:#e3f2fd">+30 يوم من اليوم</button></div>' + histHtml +
-      '<div><button id="rdGo" style="background:#2e7d32;color:#fff">متابعة</button><button id="rdX" style="background:#ddd">إغلاق</button></div>');
-    var inp = o.querySelector('#rdNewDate');
-    o.querySelector('#rdX').onclick = function () { o.remove(); };
-    o.querySelector('#rdP30e').onclick = function () { inp.value = isoOf(addDaysP(curP || todayP(), 30)); };
-    o.querySelector('#rdP30t').onclick = function () { inp.value = isoOf(addDaysP(todayP(), 30)); };
-    Array.prototype.forEach.call(o.querySelectorAll('[data-back]'), function (a) {
-      a.onclick = function (ev) { ev.preventDefault(); var p = parseYMD(a.getAttribute('data-back')); if (p) inp.value = isoOf(p); };
-    });
-    o.querySelector('#rdGo').onclick = function () {
-      var np = dateInputP(inp.value);
-      if (!np) { toast('اختر تاريخًا صحيحًا'); return; }
-      o.remove();
-      proceedEdit(row, user, c, np);
-    };
-  }
-
-  async function proceedEdit(row, user, c, newP) {
     var jar = {}, log = [];
     var editUrl = c.base + '?cont=edit_user&username=' + encodeURIComponent(user);
     try {
-      toast('⏳ الاتصال بالراديوس...', 90000);
+      toast('⏳ جلب بيانات المشترك من الراديوس...', 90000);
       await rdLogin(c, jar, log);
       var pg = await req(editUrl, 'GET', null, jar);
       log.push('edit page: ' + pg.status);
       var f = collectForm(pg.text, pg.url);
       if (f.error) throw { diag: true, msg: f.error, log: log, body: 'FIELDS: ' + (f.names || []).join(', ') };
-      var newVal = f.expOld ? fmtLike(f.expOld, newP) : isoOf(newP);
-      if (!newVal) throw { diag: true, msg: 'صيغة التاريخ في الراديوس غير مفهومة: ' + f.expOld, log: log, body: '' };
-      var send = f.pairs.map(function (p) { return p[0] === f.expName ? [p[0], newVal] : p; });
-      if (f.submit) send.push(f.submit);
-      var hasUser = f.pairs.some(function (p) { return String(p[1]).trim().toLowerCase() === user.toLowerCase(); });
-      var tested = false; try { tested = localStorage.getItem(TESTED_KEY) === '1'; } catch (_) {}
-      var list = f.pairs.map(function (p) { var v = /pass|pwd/i.test(p[0]) ? '••••' : String(p[1]).slice(0, 40); return p[0] + ' = ' + v; }).join('\n');
       rmToast();
-      var o = overlay('<b>تأكيد التعديل في الراديوس</b>' +
-        '<div style="margin-top:8px">👤 <span dir="ltr">' + esc(user) + '</span></div>' +
-        '<div>الحقل: <span dir="ltr">' + esc(f.expName) + '</span></div>' +
-        '<div>من: <b dir="ltr">' + esc(f.expOld || '—') + '</b></div>' +
-        '<div>إلى: <b dir="ltr" style="color:#2e7d32">' + esc(newVal) + '</b></div>' +
-        (hasUser ? '' : '<div style="color:#c00;margin-top:6px">⚠️ لم أجد اسم المشترك ضمن حقول الصفحة، تأكد من صحة الصفحة.</div>') +
-        (tested ? '' : '<div style="color:#c60;margin-top:6px">⚠️ أول استخدام: جرّبه على مشترك تجريبي أولًا.</div>') +
-        '<details style="margin-top:8px"><summary>الحقول التي سيتم إرسالها (' + f.pairs.length + ')</summary><pre>' + esc(list) + '</pre></details>' +
-        '<div><button id="rdOk" style="background:#2e7d32;color:#fff">✅ تأكيد وحفظ</button><button id="rdX" style="background:#ddd">إلغاء</button></div>');
-      o.querySelector('#rdX').onclick = function () { o.remove(); };
-      o.querySelector('#rdOk').onclick = function () { o.remove(); saveEdit(row, user, c, jar, log, f, send, newVal, editUrl); };
+      showEditor(row, user, c, jar, log, f, editUrl, preset || {});
     } catch (e) { editFail(e, log); }
   }
 
-  async function saveEdit(row, user, c, jar, log, f, send, newVal, editUrl) {
+  function showEditor(row, user, c, jar, log, f, editUrl, preset) {
+    var base = clone(f.fields), expIdx = -1;
+    base.forEach(function (x, i) { if (x.name === f.expName && x.kind === 'text') expIdx = i; });
+    var pkgIdx = -1, primary = [];
+    base.forEach(function (x, i) {
+      if (i === expIdx || x.kind === 'hidden' || x.kind === 'secret') return;
+      var isPkg = (x.kind === 'select' || x.kind === 'radio') && pkgIdx < 0 && (/(srvid|service|profile|plan|package|speed|group)/i.test(x.name) || /(service|package|plan|profile|speed|باقة|سرعة|خدمة)/i.test(x.label));
+      if (isPkg) { pkgIdx = i; primary.push(i); }
+      else if ((x.kind === 'checkbox' || x.kind === 'select') && /(enable|active|status|disabled)/i.test(x.name)) primary.push(i);
+    });
+    var others = [];
+    base.forEach(function (x, i) { if (i !== expIdx && x.kind !== 'hidden' && x.kind !== 'secret' && primary.indexOf(i) < 0) others.push(i); });
+    var inpS = 'width:100%;box-sizing:border-box;padding:9px;border:1px solid #bbb;border-radius:8px;font-size:15px;';
+    function ctl(i) {
+      var x = base[i], a = ' data-i="' + i + '"';
+      if (i === expIdx) {
+        var p = parseYMD(x.value);
+        if (p || !x.value) return '<input type="date"' + a + ' value="' + (p ? isoOf(p) : '') + '" style="' + inpS + 'direction:ltr">';
+        return '<input type="text"' + a + ' value="' + esc(x.value) + '" style="' + inpS + 'direction:ltr">';
+      }
+      if (x.kind === 'checkbox') return '<label style="display:flex;align-items:center;gap:8px;margin:0"><input type="checkbox"' + a + (x.checked ? ' checked' : '') + ' style="width:auto"> ' + esc(x.label || x.name) + '</label>';
+      if (x.kind === 'select' || x.kind === 'radio') {
+        var opts = x.options.map(function (o) { return '<option value="' + esc(o.v) + '"' + (x.value.indexOf(o.v) >= 0 ? ' selected' : '') + '>' + esc(o.t) + '</option>'; }).join('');
+        if (x.kind === 'radio' && x.value[0] === '') opts = '<option value="" selected>—</option>' + opts;
+        return '<select' + a + (x.multi ? ' multiple' : '') + ' style="' + inpS + '">' + opts + '</select>';
+      }
+      if (x.kind === 'textarea') return '<textarea' + a + ' rows="2" style="' + inpS + '">' + esc(x.value) + '</textarea>';
+      return '<input type="text"' + a + ' value="' + esc(x.value) + '" style="' + inpS + '">';
+    }
+    function rowHTML(i) {
+      var x = base[i];
+      if (x.kind === 'checkbox') return '<div style="margin:10px 0">' + ctl(i) + '</div>';
+      return '<div style="margin:8px 0"><div style="font-size:13px;color:#333;margin-bottom:3px">' + esc(x.label || x.name) + '</div>' + ctl(i) + '</div>';
+    }
+    var curP = parseYMD(base[expIdx].value);
+    var html = '<style>#rdBox{max-width:520px}#rdBox label{margin:0}</style>' +
+      '<b style="font-size:17px">✏️ تعديل المشترك في الراديوس</b>' +
+      '<div style="margin-top:6px">👤 ' + esc(window.__rdRowName || user) + ' <span dir="ltr">(' + esc(user) + ')</span></div>' +
+      '<div style="margin:10px 0 2px;font-size:13px;color:#333">📅 تاريخ الانتهاء <span style="color:#777">(الحالي: <span dir="ltr">' + esc(base[expIdx].value || '—') + '</span>)</span></div>' + ctl(expIdx) +
+      '<div><button type="button" id="rdP30e" style="background:#e3f2fd">+30 يوم من الانتهاء</button><button type="button" id="rdP30t" style="background:#e3f2fd">+30 يوم من اليوم</button></div>' +
+      primary.map(rowHTML).join('') +
+      (others.length ? '<details style="margin-top:10px"><summary style="cursor:pointer">حقول أخرى (' + others.length + ')</summary>' + others.map(rowHTML).join('') + '</details>' : '') +
+      '<div style="margin-top:6px"><a href="#" id="rdHistLink">📜 سجل تعديلات هذا المشترك</a></div>' +
+      '<div><button type="button" id="rdGo" style="background:#2e7d32;color:#fff">متابعة</button><button type="button" id="rdX" style="background:#ddd">إغلاق</button></div>';
+    var o = overlay(html);
+    function el(i) { return o.querySelector('[data-i="' + i + '"]'); }
+    function setRaw(i, raw) {
+      var x = base[i], e = el(i); if (!e) return;
+      if (i === expIdx && e.type === 'date') { var p = parseYMD(raw); if (p) e.value = isoOf(p); return; }
+      if (x.kind === 'checkbox') e.checked = raw === '1';
+      else e.value = raw.split('\u0001')[0];
+    }
+    Object.keys(preset || {}).forEach(function (nm) { base.forEach(function (x, i) { if (x.name === nm && x.kind !== 'hidden') setRaw(i, preset[nm]); }); });
+    function readNew() {
+      var nf = clone(base);
+      Array.prototype.forEach.call(o.querySelectorAll('[data-i]'), function (e) {
+        var i = +e.getAttribute('data-i'), x = nf[i]; if (!x) return;
+        if (i === expIdx && e.type === 'date') { var p = dateInputP(e.value); if (p) x.value = base[i].value ? (fmtLike(base[i].value, p) || isoOf(p)) : isoOf(p); }
+        else if (x.kind === 'checkbox') x.checked = e.checked;
+        else if (x.kind === 'select' || x.kind === 'radio') x.value = x.multi ? Array.prototype.filter.call(e.options, function (op) { return op.selected; }).map(function (op) { return op.value; }) : [e.value];
+        else x.value = e.value;
+      });
+      return nf;
+    }
+    function presetFrom(nf, ch) { var m = {}; ch.forEach(function (d) { m[nf[d.i].name] = rawOf(nf[d.i]); }); return m; }
+    o.querySelector('#rdX').onclick = function () { o.remove(); };
+    o.querySelector('#rdHistLink').onclick = function (ev) { ev.preventDefault(); showLog(user); };
+    o.querySelector('#rdP30e').onclick = function () { var e = el(expIdx); if (e && e.type === 'date') e.value = isoOf(addDaysP(curP || todayP(), 30)); };
+    o.querySelector('#rdP30t').onclick = function () { var e = el(expIdx); if (e && e.type === 'date') e.value = isoOf(addDaysP(todayP(), 30)); };
+    o.querySelector('#rdGo').onclick = function () {
+      var nf = readNew(), ch = diffFields(base, nf, f.expName);
+      if (!ch.length) { toast('لا توجد تغييرات لحفظها'); return; }
+      var hasUser = base.some(function (x) { return (x.kind === 'hidden' || x.kind === 'text') && String(x.value).trim().toLowerCase() === user.toLowerCase(); });
+      var tested = false; try { tested = localStorage.getItem(TESTED_KEY) === '1'; } catch (_) {}
+      var lines = ch.map(function (d) {
+        return '<div style="padding:5px 0;border-bottom:1px solid #eee"><b>' + esc(d.label) + '</b><div>من: <span dir="ltr">' + esc(textOf(base[d.i])) + '</span></div><div>إلى: <b dir="ltr" style="color:#2e7d32">' + esc(textOf(nf[d.i])) + '</b></div></div>';
+      }).join('');
+      var o2 = overlay('<b>تأكيد التعديلات في الراديوس</b><div style="margin-top:6px">👤 <span dir="ltr">' + esc(user) + '</span></div>' + lines +
+        (hasUser ? '' : '<div style="color:#c00;margin-top:6px">⚠️ لم أجد اسم المشترك ضمن حقول الصفحة، تأكد من صحة الصفحة.</div>') +
+        (tested ? '' : '<div style="color:#c60;margin-top:6px">⚠️ أول استخدام: جرّبه على مشترك تجريبي أولًا.</div>') +
+        '<div><button type="button" id="rdOk" style="background:#2e7d32;color:#fff">✅ تأكيد وحفظ</button><button type="button" id="rdBack" style="background:#e3f2fd">رجوع</button><button type="button" id="rdX" style="background:#ddd">إلغاء</button></div>');
+      o2.querySelector('#rdX').onclick = function () { o2.remove(); };
+      o2.querySelector('#rdBack').onclick = function () { showEditor(row, user, c, jar, log, f, editUrl, presetFrom(nf, ch)); };
+      o2.querySelector('#rdOk').onclick = function () { o2.remove(); saveEdit(row, user, c, jar, log, f, base, nf, ch, editUrl); };
+    };
+  }
+
+  async function saveEdit(row, user, c, jar, log, f, base, nf, ch, editUrl) {
     try {
       toast('⏳ جاري الحفظ في الراديوس...', 90000);
+      var send = toPairs(nf); if (f.submit) send.push(f.submit);
       var body = pairsEnc(send), rr;
       if (f.method === 'GET') rr = await req(f.action + (f.action.indexOf('?') > -1 ? '&' : '?') + body, 'GET', null, jar);
       else rr = await req(f.action, 'POST', body, jar);
@@ -3886,22 +4005,36 @@ window.Papa = { parse: function (text, opts) {
       var pg2 = await req(editUrl, 'GET', null, jar);
       var f2 = collectForm(pg2.text, pg2.url);
       if (f2.error) throw { diag: true, msg: 'تعذّر التحقق بعد الحفظ: ' + f2.error, log: log, body: '' };
-      var got = parseYMD(f2.expOld), want = parseYMD(newVal);
-      var same = !!(got && want && got.y === want.y && got.m === want.m && got.d === want.d);
-      var diffs = diffPairs(f.pairs, f2.pairs, f.expName);
-      pushLog({ u: user, from: f.expOld, to: newVal, t: Date.now(), ok: same });
-      if (!same) throw { diag: true, msg: 'لم يتأكد التغيير: الراديوس يعرض ' + (f2.expOld || '—') + ' بدل ' + newVal, log: log, body: visibleText(rr.text).slice(0, 600) };
-      if (!diffs.length) { try { localStorage.setItem(TESTED_KEY, '1'); } catch (_) {} }
-      var disp = fmtLike(row.Expiration, got);
-      if (disp) row.Expiration = disp;
+      var now = Date.now(), entries = [], failed = [], changedNames = {};
+      ch.forEach(function (d) {
+        var want = nf[d.i], got = findField(f2.fields, want), okf = !!got && sameVal(want, rawOf(want), rawOf(got), f.expName);
+        changedNames[want.name] = 1;
+        entries.push({ u: user, f: want.name, l: d.label, from: textOf(base[d.i]), to: textOf(want), fv: rawOf(base[d.i]), tv: rawOf(want), t: now, ok: okf });
+        if (!okf) failed.push(d.label + ': المتوقع ' + textOf(want) + '، الراديوس يعرض ' + (got ? textOf(got) : '—'));
+      });
+      pushLogs(entries);
+      var extra = [];
+      base.forEach(function (x, i) {
+        if (x.kind === 'hidden' || x.kind === 'secret' || changedNames[x.name]) return;
+        var g = findField(f2.fields, x);
+        if (g && rawOf(g) !== rawOf(x)) extra.push(x.label || x.name);
+      });
+      if (failed.length) throw { diag: true, msg: 'لم يتأكد حفظ بعض التعديلات في الراديوس', log: log, body: failed.join(' | ') };
+      if (!extra.length) { try { localStorage.setItem(TESTED_KEY, '1'); } catch (_) {} }
+      /* تحديث الصف محليًا فورًا */
+      ch.forEach(function (d) {
+        var w = nf[d.i];
+        if (w.name === f.expName) { var np = parseYMD(w.value), disp = np ? fmtLike(row.Expiration, np) : null; if (disp) row.Expiration = disp; }
+        else if (/(srvid|service|profile|plan|package)/i.test(w.name) && row.Service !== undefined) row.Service = textOf(w);
+      });
       if (window.__rdRerender) window.__rdRerender();
       var cb = document.getElementById('modalCloseBtn2'); if (cb) cb.click();
       rmToast();
-      if (diffs.length) {
-        var o = overlay('<b>✅ تم تعديل التاريخ</b><div style="color:#c60;margin-top:6px">⚠️ تغيّرت حقول أخرى بعد الحفظ (قد يكون هذا طبيعيًا)، راجعها في الراديوس:</div><pre>' + esc(diffs.join(', ')) + '</pre><button id="rdX" style="background:#ddd">حسنًا</button>');
+      if (extra.length) {
+        var o = overlay('<b>✅ تم حفظ التعديلات</b><div style="color:#c60;margin-top:6px">⚠️ تغيّرت حقول أخرى بعد الحفظ (قد يكون هذا طبيعيًا)، راجعها في الراديوس:</div><pre>' + esc(extra.join(', ')) + '</pre><button id="rdX" style="background:#ddd">حسنًا</button>');
         o.querySelector('#rdX').onclick = function () { o.remove(); };
       } else {
-        toast('✅ تم تغيير التاريخ إلى ' + newVal + ' في الراديوس', 4000);
+        toast('✅ تم الحفظ في الراديوس (' + ch.length + (ch.length === 1 ? ' تعديل)' : ' تعديلات)'), 4000);
       }
       setTimeout(refresh, 800);
     } catch (e) { editFail(e, log); }
@@ -3911,12 +4044,59 @@ window.Papa = { parse: function (text, opts) {
     if (e && e.diag) showDiag(e);
     else showDiag({ msg: 'تعذّر تنفيذ التعديل: ' + (e && e.message ? e.message : JSON.stringify(e)), log: (log || []).concat(['آخر خطوة: ' + (window.__rdStep || '-')]), body: '' });
   }
+
+  /* ---------- سجل التعديلات ---------- */
+  function showLog(filterUser) {
+    var o = overlay('<style>#rdBox{max-width:560px}</style><b style="font-size:17px">📜 سجل التعديلات</b>' +
+      '<input id="rdLogQ" placeholder="بحث باسم المشترك أو الحقل..." value="' + esc(filterUser || '') + '" style="margin-top:8px;direction:rtl">' +
+      '<div id="rdLogList" style="margin-top:6px"></div>' +
+      '<div><button type="button" id="rdLogClear" style="background:#fdecea">🗑 مسح السجل</button><button type="button" id="rdX" style="background:#ddd">إغلاق</button></div>');
+    var list = o.querySelector('#rdLogList'), q = o.querySelector('#rdLogQ'), clearBtn = o.querySelector('#rdLogClear'), armed = false, shown = [];
+    function norm(e) { return e.f ? e : { u: e.u, f: 'expiration', l: 'تاريخ الانتهاء', from: e.from, to: e.to, fv: e.from, tv: e.to, t: e.t, ok: e.ok }; }
+    function render() {
+      var term = q.value.trim().toLowerCase();
+      shown = readLog().map(norm).reverse().filter(function (e) { return !term || (e.u + ' ' + e.l).toLowerCase().indexOf(term) >= 0; }).slice(0, 150);
+      if (!shown.length) { list.innerHTML = '<div style="color:#777;padding:12px 0">لا توجد تعديلات مسجّلة.</div>'; return; }
+      var html = '', day = '';
+      shown.forEach(function (e, k) {
+        var d = fmtDay(e.t);
+        if (d !== day) { day = d; html += '<div style="margin-top:10px;font-weight:700;color:#1f3a5f">' + esc(d) + '</div>'; }
+        html += '<div style="border-bottom:1px solid #eee;padding:6px 0;font-size:13px"><b>' + esc(fmtHM(e.t)) + '</b> · <span dir="ltr">' + esc(e.u) + '</span> · ' + esc(e.l) +
+          '<div>من <span dir="ltr">' + esc(e.from) + '</span> إلى <b dir="ltr">' + esc(e.to) + '</b> ' + (e.ok ? '✓' : '✗ لم يتأكد') +
+          (e.ok && e.fv !== undefined ? ' <a href="#" data-k="' + k + '">↩ تراجع</a>' : '') + '</div></div>';
+      });
+      list.innerHTML = html;
+    }
+    render();
+    q.oninput = render;
+    list.onclick = function (ev) {
+      var a = ev.target.closest ? ev.target.closest('[data-k]') : null; if (!a) return;
+      ev.preventDefault();
+      var e = shown[+a.getAttribute('data-k')]; if (!e) return;
+      var r = window.__rdFindRow ? window.__rdFindRow(e.u) : null;
+      if (!r) { toast('هذا المشترك غير موجود في القائمة الحالية'); return; }
+      o.remove();
+      var pre = {}; pre[e.f] = e.fv;
+      window.__rdRow = r;
+      editSubscriber(r, pre).catch(function (err) { editFail(err, []); });
+    };
+    clearBtn.onclick = function () {
+      if (!armed) { armed = true; clearBtn.textContent = 'اضغط مرة أخرى للتأكيد'; return; }
+      try { localStorage.removeItem(LOG_KEY); } catch (_) {}
+      render(); armed = false; clearBtn.textContent = '🗑 مسح السجل';
+    };
+    o.querySelector('#rdX').onclick = function () { o.remove(); };
+  }
+  (function () {
+    var lb = document.getElementById('logBtn');
+    if (lb) { lb.style.display = 'inline-flex'; lb.addEventListener('click', function () { showLog(''); }); }
+  })();
   document.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('#rdEditExpBtn') : null;
     if (!b) return;
     e.preventDefault(); e.stopPropagation();
     if (!window.__rdRow) { toast('افتح بيانات المشترك أولًا'); return; }
-    try { editExpiry(window.__rdRow).catch(function (err) { editFail(err, []); }); } catch (err) { editFail(err, []); }
+    try { editSubscriber(window.__rdRow).catch(function (err) { editFail(err, []); }); } catch (err) { editFail(err, []); }
   }, true);
 
 
@@ -3924,7 +4104,7 @@ window.Papa = { parse: function (text, opts) {
   var ONLINE_CANDIDATES = ['?cont=online_users', '?cont=onlineusers', '?cont=online', '?cont=show_online', '?cont=list_online', '?cont=sessions'];
   function parseOnline(html) {
     var doc = new DOMParser().parseFromString(html, 'text/html');
-    var set = {}, tableFound = false;
+    var set = {}, ips = {}, tableFound = false;
     Array.prototype.forEach.call(doc.querySelectorAll('a[href*="username="]'), function (a) {
       var m = (a.getAttribute('href') || '').match(/[?&]username=([^&#]+)/);
       if (m) { try { var u = decodeURIComponent(m[1].replace(/\+/g, ' ')).trim().toLowerCase(); if (u) set[u] = 1; } catch (_) {} }
@@ -3941,14 +4121,20 @@ window.Papa = { parse: function (text, opts) {
       }
       if (idx < 0) return;
       tableFound = true;
+      var hc = Array.prototype.slice.call(rows[hi].children), ipIdx = -1, q;
+      for (q = 0; q < hc.length; q++) { if (/^(current\s*ip|framed\s*ip|ip\s*address|ipv4|ip)$/i.test(hc[q].textContent.trim())) { ipIdx = q; break; } }
+      if (ipIdx < 0) for (q = 0; q < hc.length; q++) { var h = hc[q].textContent.trim(); if (/^ip/i.test(h) && !/nas/i.test(h)) { ipIdx = q; break; } }
       for (var i = hi + 1; i < rows.length; i++) {
         var cell = rows[i].children[idx]; if (!cell) continue;
         var u = cell.textContent.trim().toLowerCase();
-        if (u && !/\s/.test(u) && u.length < 64) set[u] = 1;
+        if (u && !/\s/.test(u) && u.length < 64) {
+          set[u] = 1;
+          if (ipIdx >= 0 && rows[i].children[ipIdx]) { var mm = rows[i].children[ipIdx].textContent.match(/\d{1,3}(?:\.\d{1,3}){3}/); if (mm) ips[u] = mm[0]; }
+        }
       }
     });
     var text = (doc.body ? doc.body.textContent : '') || '';
-    return { users: Object.keys(set), tableFound: tableFound, emptyMsg: /no\s+(online\s+)?(users|sessions)|لا\s*يوجد/i.test(text), mentionsOnline: /online|متصل/i.test(text) };
+    return { users: Object.keys(set), ips: ips, tableFound: tableFound, emptyMsg: /no\s+(online\s+)?(users|sessions)|لا\s*يوجد/i.test(text), mentionsOnline: /online|متصل/i.test(text) };
   }
   async function fetchOnline(c, jar, log) {
     var urls = (c.onlineUrl ? [c.onlineUrl] : []).concat(ONLINE_CANDIDATES.map(function (x) { return c.base + x; }));
@@ -3956,7 +4142,7 @@ window.Papa = { parse: function (text, opts) {
     function accept(r, u) {
       if (r.status >= 400 || loginFields(r.text, r.url, c)) return null;
       p = parseOnline(r.text);
-      if (p.users.length > 0 || p.tableFound || (p.emptyMsg && p.mentionsOnline)) return { users: p.users, url: u };
+      if (p.users.length > 0 || p.tableFound || (p.emptyMsg && p.mentionsOnline)) return { users: p.users, ips: p.ips, url: u };
       return null;
     }
     for (i = 0; i < urls.length; i++) {
@@ -3993,7 +4179,7 @@ window.Papa = { parse: function (text, opts) {
       toast('⏳ جاري جلب المتصلين...', 90000);
       await rdLogin(c, jar, log);
       var res = await fetchOnline(c, jar, log);
-      if (window.__rdApplyOnline) window.__rdApplyOnline(res.users);
+      if (window.__rdApplyOnline) window.__rdApplyOnline(res.users, res.ips);
       rmToast();
       toast('📡 المتصلون الآن: ' + res.users.length, 4000);
     } catch (e) {
