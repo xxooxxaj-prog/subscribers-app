@@ -594,9 +594,21 @@ window.Papa = { parse: function (text, opts) {
   .status-chip{border:1px solid #cdd6e4;background:#fff;border-radius:16px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit;color:#2b2d42;}
   .status-chip.active{background:#2a7de1;color:#fff;border-color:#2a7de1;}
   .on-dot{font-size:11px;margin:0 2px;}
+  .new-badge{font-size:11px;margin:0 2px;}
+  a.cur-ip{color:#1a5fb4;text-decoration:underline;}
+  .col-prices { width: 10%; } .col-curip { width: 9%; }
+  .prices-cell{font-size:10.5px;line-height:1.3;white-space:nowrap;text-align:center;}
+  .prices-cell .pf{font-size:9px;}
+  td.td-prices{background:#eef7ff !important;color:#0d47a1;font-weight:700;padding:2px 3px !important;border-left:1px solid #d6e8f7;border-right:1px solid #d6e8f7;}
+  tr:nth-child(even) td.td-prices{background:#e3f0fd !important;}
+  tr:hover td.td-prices{background:#cfe4fb !important;}
+  th.col-prices{background:#14304d !important;border-left:1px solid #0e2338;border-right:1px solid #0e2338;}
+  th.col-prices:hover{background:#1d4470 !important;}
+  .ds-wrap{display:flex;gap:3px;direction:ltr;}
+  .search-group .ds-wrap select{padding:3px 2px;min-width:0;flex:1;width:auto;}
+  .ds-wrap.search-active select{border-color:#e65100;background:#fff3e0;}
   .cur-ip{font-family:monospace;font-size:12px;direction:ltr;unicode-bidi:embed;}
   .cur-ip.none{color:#aab;}
-  th.col-curip{width:1%;white-space:nowrap;}
   .native-app #saveStatus,.native-app #saveAllBtn,.native-app #chip-folder,.native-app #chip-users,.native-app #chip-wifi,.native-app #chip-prices,.native-app #reloadAutoBtn{display:none !important;}
   .status-last{font-size:12px;color:#667;margin-right:auto;}
 </style>
@@ -667,11 +679,11 @@ window.Papa = { parse: function (text, opts) {
       <label>🏡 البيت</label>
       <input type="number" id="houseSearch">
     </div>
-    <div class="search-group" style="flex:0 0 130px;">
+    <div class="search-group" style="flex:0 0 175px;">
       <label>📅 من</label>
       <input type="date" id="dateFromSearch">
     </div>
-    <div class="search-group" style="flex:0 0 130px;">
+    <div class="search-group" style="flex:0 0 175px;">
       <label>📅 إلى</label>
       <input type="date" id="dateToSearch">
     </div>
@@ -879,21 +891,21 @@ window.Papa = { parse: function (text, opts) {
   const FLAG_TR = '🇹🇷';
   const FLAG_SY = '🇸🇾';
 
-  const HIDDEN_COLS = ['Address', '🌐 IP', '📶 WiFi', '🔑 WiFi Pass', '🔐 Router Pass'];
+  const HIDDEN_COLS = ['Price $', 'Price 🇹🇷', 'Price 🇸🇾', 'Address', '🌐 IP', '📶 WiFi', '🔑 WiFi Pass', '🔐 Router Pass'];
   const DISPLAY_COLUMNS = [
     'Expiration','Full Name' , 'Service',
-    'Price $', 'Price 🇹🇷', 'Price 🇸🇾', 'User name', 'Current IP', 'Address',
+    'Prices', 'Price $', 'Price 🇹🇷', 'Price 🇸🇾', 'User name', 'Current IP', 'Address',
     '🌐 IP', '📶 WiFi', '🔑 WiFi Pass', '🔐 Router Pass'
   ];
 
   const TOGGLEABLE_COLUMNS = [
-    ...DISPLAY_COLUMNS.filter(c => !HIDDEN_COLS.includes(c)).map(c => ({ key: c, label: c === 'Full Name' ? '👤 Full Name' : c })),
+    ...DISPLAY_COLUMNS.filter(c => !HIDDEN_COLS.includes(c)).map(c => ({ key: c, label: c === 'Full Name' ? '👤 Full Name' : c === 'Prices' ? '💰 الأسعار' : c })),
     { key: '_block', label: '🏠 حارة' },
     { key: '_house', label: '🏡 بيت' }
   ];
 
   const SORT_KEY_MAP = {
-    'Price $': '_priceUSD', 'Price 🇹🇷': '_priceTL', 'Price 🇸🇾': '_priceSY',
+    'Prices': '_priceUSD', 'Price $': '_priceUSD', 'Price 🇹🇷': '_priceTL', 'Price 🇸🇾': '_priceSY',
     'Service': '_speed',
     '🌐 IP': '_extraIP', '📶 WiFi': '_extraWifi',
     '🔑 WiFi Pass': '_extraWifiPass', '🔐 Router Pass': '_extraRouterPass'
@@ -1267,6 +1279,7 @@ window.Papa = { parse: function (text, opts) {
   const houseSearch = document.getElementById('houseSearch');
   const dateFromSearch = document.getElementById('dateFromSearch');
   const dateToSearch = document.getElementById('dateToSearch');
+  makeLatinDate(dateFromSearch); makeLatinDate(dateToSearch);
   const quickDateFilter = document.getElementById('quickDateFilter');
   const resetBtn = document.getElementById('resetSearchBtn');
   const exportNamesBtn = document.getElementById('exportNamesBtn');
@@ -1909,6 +1922,7 @@ window.Papa = { parse: function (text, opts) {
       const k = key.trim();
       if (COLUMN_MAPPING[k]) n[COLUMN_MAPPING[k]] = (rawRow[key] || '').trim();
       else if (ENGLISH_KEYS.includes(k)) n[k] = (rawRow[key] || '').trim();
+      else if (/(creat|regist|signup|joined|إنشاء|انشاء|تسجيل)/i.test(k)) { const ms = rdParseMs(rawRow[key]); if (ms) n._created = ms; }
     }
     return n;
   }
@@ -1918,7 +1932,7 @@ window.Papa = { parse: function (text, opts) {
     const { speed, displaySpeed } = extractSpeed(rowObj.Service || '');
     const pm = (speed && PRICE_MAP[speed]) ? PRICE_MAP[speed] : null;
     const enriched = {
-      ...rowObj, Service: displaySpeed, _speed: speed,
+      ...rowObj, Service: displaySpeed, _speed: speed, _svcRaw: rowObj.Service || '',
       _priceUSD: pm ? pm.usd : '', _priceTL: pm ? pm.tl : '', _priceSY: pm ? pm.sy : '',
       _block: block, _house: house,
       _extraIP: '', _extraWifi: '', _extraWifiPass: '', _extraRouterPass: ''
@@ -1972,6 +1986,7 @@ window.Papa = { parse: function (text, opts) {
         }).filter(r => r !== null);
 
         applyExtraData();
+        if (window.__rdSnapshot) window.__rdSnapshot(allRows);
         if (fileName) fileName.textContent = fileNameForDisplay || 'users.csv';
         setDateRangeFromData();
         applyFiltersAndSort();
@@ -1995,16 +2010,18 @@ window.Papa = { parse: function (text, opts) {
       const diff = Math.round((getDateValue(row.Expiration) - t0.getTime()) / 86400000);
       if (diff <= 3) ks.push('soon');
     }
+    if (row._isNew) ks.push('new');
     if (window.__onlineSet) ks.push(window.__onlineSet[String(row['User name'] || '').trim().toLowerCase()] ? 'online' : 'offline');
     return ks;
   }
   window.__rdMatchStatus = function (row) { return rdStatusKeys(row).indexOf(window.__statusFilter) !== -1; };
   window.__rdChips = function () {
     const box = document.getElementById('statusChips'); if (!box) return;
-    const counts = { all: allRows.length, today: 0, soon: 0, past: 0, future: 0, online: 0, offline: 0 };
+    const counts = { all: allRows.length, today: 0, soon: 0, past: 0, future: 0, online: 0, offline: 0, new: 0 };
     allRows.forEach(r => rdStatusKeys(r).forEach(k => { counts[k]++; }));
     const defs = [['all', 'الكل'], ['today', '🟠 ينتهي اليوم'], ['soon', '⏳ خلال 3 أيام'], ['past', '🔴 منتهي'], ['future', '✅ فعّال']];
     if (window.__onlineSet) defs.push(['online', '🟢 متصل الآن'], ['offline', '⚫ غير متصل']);
+    if (counts.new > 0) defs.push(['new', '🆕 جدد']);
     let html = defs.map(d => `<button type="button" class="status-chip${window.__statusFilter === d[0] ? ' active' : ''}" data-k="${d[0]}">${d[1]} <b>${counts[d[0]]}</b></button>`).join('');
     try {
       const t = parseInt(localStorage.getItem('rdLastRefresh') || '0', 10);
@@ -2099,6 +2116,129 @@ window.Papa = { parse: function (text, opts) {
     const t = String(u || '').trim().toLowerCase();
     return allRows.find(r => String(r['User name'] || '').trim().toLowerCase() === t) || null;
   };
+
+
+  /* ===== لقطة المشتركين: كشف الجدد وتغييرات الراديوس + أدوات مساعدة ===== */
+  const SNAP_KEY = 'rdSnap', SNAP_LOG_KEY = 'rdExpLog', NEW_DAYS = 7;
+  window.__rdFullName = function (r) { return getFullName(r); };
+  function rdParseMs(v) {
+    const m = String(v || '').match(/(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})/);
+    if (!m) return 0;
+    let y, mo, d;
+    if (m[1].length === 4) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else if (m[3].length === 4) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+    else return 0;
+    if (!(y > 1999 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return 0;
+    return new Date(y, mo - 1, d).getTime();
+  }
+  function snapDateKey(s) {
+    const ms = rdParseMs(s);
+    if (!ms) return String(s || '').trim();
+    const t = new Date(ms);
+    return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  }
+  function svcKey(raw) { const sp = extractSpeed(String(raw || '')).speed; return sp || String(raw || '').trim().toLowerCase(); }
+  function snapMarkNew(rows, snap, now) {
+    rows.forEach(r => {
+      const k = String(r['User name'] || '').trim().toLowerCase();
+      let ts = r._created || 0;
+      if (!ts && snap && snap.u && snap.u[k]) ts = snap.u[k][3] || 0;
+      r._newTs = ts;
+      r._isNew = ts > 0 && ts <= now + 86400000 && (now - ts) <= NEW_DAYS * 86400000;
+    });
+  }
+  function rdNewBadge(row) {
+    if (!row._isNew) return '';
+    const d = Math.max(0, Math.floor((Date.now() - row._newTs) / 86400000));
+    return '<span class="new-badge" title="' + (row._created ? 'أُنشئ' : 'ظهر') + ' منذ ' + (d === 0 ? 'اليوم' : d + ' يوم') + '">🆕</span>';
+  }
+  window.__rdSnapshot = function (rows) {
+    try {
+      const now = Date.now();
+      const keyOf = r => String(r['User name'] || '').trim().toLowerCase();
+      const cur = {}; let n = 0;
+      rows.forEach(r => { const k = keyOf(r); if (k) { cur[k] = r; n++; } });
+      if (!n) return;
+      let snap = null; try { snap = JSON.parse(localStorage.getItem(SNAP_KEY) || 'null'); } catch (_) {}
+      const mk = r => [snapDateKey(r.Expiration), r._svcRaw || '', getFullName(r), 0];
+      if (!snap || !snap.u) {
+        const u = {}; Object.keys(cur).forEach(k => { u[k] = mk(cur[k]); });
+        snap = { v: 1, at: now, u: u };
+        try { localStorage.setItem(SNAP_KEY, JSON.stringify(snap)); } catch (_) {}
+        snapMarkNew(rows, snap, now); return;
+      }
+      const prev = snap.u, ck = Object.keys(cur), pk = Object.keys(prev);
+      const newK = ck.filter(k => !prev[k]), goneK = pk.filter(k => !cur[k]);
+      const suspicious = newK.length > Math.max(25, ck.length * 0.4) || goneK.length > Math.max(25, pk.length * 0.3);
+      if (!suspicious) {
+        const ev = [], isNew = {};
+        newK.forEach(k => {
+          const r = cur[k], a = mk(r); a[3] = now; prev[k] = a; isNew[k] = 1;
+          ev.push({ u: r['User name'], n: a[2], src: 'new', f: 'new', l: 'مشترك جديد', from: '', to: (r._svcRaw || '') + (r.Expiration ? ' · ' + snapDateKey(r.Expiration) : ''), t: now, ok: true });
+        });
+        ck.forEach(k => {
+          if (isNew[k]) return;
+          const p = prev[k], r = cur[k], e = snapDateKey(r.Expiration), s = r._svcRaw || '', nm = getFullName(r);
+          if (e !== p[0]) { ev.push({ u: r['User name'], n: nm, src: 'radius', f: 'expiration', l: 'تاريخ الانتهاء', from: p[0] || '—', to: e || '—', t: now, ok: true }); p[0] = e; }
+          if (svcKey(s) !== svcKey(p[1])) { ev.push({ u: r['User name'], n: nm, src: 'radius', f: 'service', l: 'الباقة', from: p[1] || '—', to: s || '—', t: now, ok: true }); p[1] = s; }
+          p[2] = nm;
+        });
+        goneK.forEach(k => { const p = prev[k]; ev.push({ u: k, n: p[2], src: 'removed', f: 'removed', l: 'حُذف من الراديوس', from: p[1] || '', to: '', t: now, ok: true }); delete prev[k]; });
+        if (ev.length) { try { const a = JSON.parse(localStorage.getItem(SNAP_LOG_KEY) || '[]').concat(ev); localStorage.setItem(SNAP_LOG_KEY, JSON.stringify(a.slice(-1500))); } catch (_) {} }
+        snap.at = now;
+        try { localStorage.setItem(SNAP_KEY, JSON.stringify(snap)); } catch (_) {}
+      }
+      snapMarkNew(rows, snap, now);
+    } catch (e) { console.error('snapshot', e); }
+  };
+  window.__rdSnapPatch = function (user, expVal, svcText) {
+    try {
+      const snap = JSON.parse(localStorage.getItem(SNAP_KEY) || 'null'); if (!snap || !snap.u) return;
+      const p = snap.u[String(user).trim().toLowerCase()]; if (!p) return;
+      if (expVal != null) p[0] = snapDateKey(expVal);
+      if (svcText != null) p[1] = svcText;
+      localStorage.setItem(SNAP_KEY, JSON.stringify(snap));
+    } catch (_) {}
+  };
+
+  /* ===== منتقي تاريخ بأرقام إنكليزية دائمًا للفلاتر ===== */
+  function makeLatinDate(input) {
+    if (!input || input.dataset.latin) return;
+    input.dataset.latin = '1';
+    const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    const w = document.createElement('span'); w.className = 'ds-wrap'; w.dir = 'ltr';
+    const cy = new Date().getFullYear();
+    const mk = (p, a, b, pad) => {
+      const s = document.createElement('select'); s.dataset.p = p;
+      let h = '<option value="">—</option>';
+      for (let k = a; k <= b; k++) h += '<option value="' + k + '">' + (pad ? String(k).padStart(2, '0') : String(k)) + '</option>';
+      s.innerHTML = h; return s;
+    };
+    const sd = mk('d', 1, 31, true), sm = mk('m', 1, 12, true), sy = mk('y', cy - 6, cy + 6, false);
+    w.appendChild(sd); w.appendChild(sm); w.appendChild(sy);
+    input.style.display = 'none';
+    input.parentNode.insertBefore(w, input.nextSibling);
+    const sync = () => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(proto.get.call(input) || '');
+      if (!m) { sd.value = ''; sm.value = ''; sy.value = ''; return; }
+      const y = String(+m[1]);
+      if (!Array.prototype.some.call(sy.options, o => o.value === y)) {
+        const op = document.createElement('option'); op.value = y; op.textContent = y;
+        const after = Array.prototype.find.call(sy.options, o => o.value && +o.value > +y);
+        sy.insertBefore(op, after || null);
+      }
+      sd.value = String(+m[3]); sm.value = String(+m[2]); sy.value = y;
+    };
+    const push = () => {
+      const d = +sd.value, m = +sm.value, y = +sy.value;
+      proto.set.call(input, (d && m && y) ? y + '-' + String(m).padStart(2, '0') + '-' + String(Math.min(d, new Date(y, m, 0).getDate())).padStart(2, '0') : '');
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    [sd, sm, sy].forEach(s => s.addEventListener('change', push));
+    Object.defineProperty(input, 'value', { get() { return proto.get.call(this); }, set(v) { proto.set.call(this, v); sync(); }, configurable: true });
+    new MutationObserver(() => w.classList.toggle('search-active', input.classList.contains('search-active'))).observe(input, { attributes: true, attributeFilter: ['class'] });
+    sync();
+  }
 
 
   /* ========== منطق الأسعار ========== */
@@ -2607,6 +2747,7 @@ window.Papa = { parse: function (text, opts) {
       else if (col === 'Full Name') cls = 'col-fullname';
       else if (col === 'Expiration') cls = 'col-expiration';
       else if (col === 'Service') cls = 'col-service';
+      else if (col === 'Prices') cls = 'col-prices';
       else if (col === 'Price $') cls = 'col-priceusd';
       else if (col === 'Price 🇹🇷') cls = 'col-pricetl';
       else if (col === 'Price 🇸🇾') cls = 'col-pricesp';
@@ -2618,7 +2759,8 @@ window.Papa = { parse: function (text, opts) {
       else if (col === '🔐 Router Pass') cls = 'col-routerpass';
 
       let label = col;
-      if (col === 'Price $') label = `Price ${FLAG_US}`;
+      if (col === 'Prices') label = '💰 الأسعار';
+      else if (col === 'Price $') label = `Price ${FLAG_US}`;
       else if (col === 'Price 🇹🇷') label = `Price ${FLAG_TR}`;
       else if (col === 'Price 🇸🇾') label = `Price ${FLAG_SY}`;
       else if (col === 'Full Name') label = '👤 Full Name';
@@ -2697,6 +2839,13 @@ window.Papa = { parse: function (text, opts) {
             val = `<span class="${sc}">${escapeHtml(val)}</span>`;
           } else val = escapeHtml(val);
         }
+        else if (col === 'Prices') {
+          const pu = stripFlag(row._priceUSD), pt = stripFlag(row._priceTL), ps = stripFlag(row._priceSY);
+          val = (row._priceUSD || row._priceTL || row._priceSY)
+            ? `<div class="prices-cell" dir="ltr"><div><span class="pf">${FLAG_US}</span> ${escapeHtml(pu)}${pu === '—' ? '' : '$'}</div><div><span class="pf">${FLAG_TR}</span> ${escapeHtml(pt)}</div><div><span class="pf">${FLAG_SY}</span> ${escapeHtml(ps)}</div></div>`
+            : '-';
+          tdClass = 'td-prices';
+        }
         else if (col === 'Price $')    { val = displayUSD(row._priceUSD); tdClass = 'td-price'; }
         else if (col === 'Price 🇹🇷')  { val = displayTL(row._priceTL);   tdClass = 'td-price'; }
         else if (col === 'Price 🇸🇾')  { val = displaySY(row._priceSY);   tdClass = 'td-price'; }
@@ -2717,7 +2866,7 @@ window.Papa = { parse: function (text, opts) {
           val = (username && username !== '-'
                   ? `<button type="button" class="fav-btn ${isFav ? 'active' : ''}" data-username="${escapeHtml(username)}" title="${favTitle}">${favIcon}</button>`
                   : '') +
-                rdOnlineDot(username) + `<span class="clickable-name" title="انقر لعرض التفاصيل">${escapeHtml(fn)}</span>`;
+                rdOnlineDot(username) + rdNewBadge(row) + `<span class="clickable-name" title="انقر لعرض التفاصيل">${escapeHtml(fn)}</span>`;
           tdClass = 'td-fullname';
         }
         else if (col === 'User name') {
@@ -2732,7 +2881,7 @@ window.Papa = { parse: function (text, opts) {
         }
         else if (col === 'Current IP') {
           const cip = String(row['Current IP'] || '').trim();
-          val = cip ? `<span class="cur-ip" dir="ltr">${escapeHtml(cip)}</span>` : '<span class="cur-ip none">—</span>';
+          val = cip ? `<a class="cur-ip" dir="ltr" href="http://${escapeHtml(cip)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(cip)}</a>` : '<span class="cur-ip none">—</span>';
         }
         else val = escapeHtml(row[col] || '');
 
@@ -3744,11 +3893,33 @@ window.Papa = { parse: function (text, opts) {
   function todayP() { var t = new Date(); return { y: t.getFullYear(), m: t.getMonth() + 1, d: t.getDate() }; }
   function dateInputP(v) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ''); return m ? { y: +m[1], m: +m[2], d: +m[3] } : null; }
   function readLog() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (_) { return []; } }
-  function pushLogs(list) { try { var a = readLog().concat(list); localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(-300))); } catch (_) {} }
+  function pushLogs(list) { try { var a = readLog().concat(list); localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(-1500))); } catch (_) {} }
   function fmtHM(t) { var d = new Date(t); return d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
   function fmtDay(t) { var d = new Date(t); return d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear(); }
   function rmToast() { var t = document.getElementById('rdToast'); if (t) t.remove(); }
   function clone(x) { return JSON.parse(JSON.stringify(x)); }
+  function nameOf(row) { try { return window.__rdFullName ? window.__rdFullName(row) : ''; } catch (_) { return ''; } }
+  /* منتقي تاريخ بأرقام إنكليزية دائمًا (بدل حقل التاريخ الأصلي الذي يتبع لغة الجهاز) */
+  function dsHTML(i, p) {
+    var cy = new Date().getFullYear(), y0 = Math.min(cy - 2, p ? p.y : cy), y1 = Math.max(cy + 6, p ? p.y : cy);
+    function opts(a, b, sel, pad) { var h = '<option value="">—</option>'; for (var k = a; k <= b; k++) h += '<option value="' + k + '"' + (sel === k ? ' selected' : '') + '>' + (pad ? padN(k, 2) : String(k)) + '</option>'; return h; }
+    var st = 'padding:10px 4px;border:1px solid #bbb;border-radius:8px;font-size:16px;flex:1;min-width:0;width:auto;direction:ltr;';
+    return '<span class="rd-ds" data-i="' + i + '" dir="ltr" style="display:flex;gap:6px">' +
+      '<select data-p="d" style="' + st + '">' + opts(1, 31, p && p.d, true) + '</select>' +
+      '<select data-p="m" style="' + st + '">' + opts(1, 12, p && p.m, true) + '</select>' +
+      '<select data-p="y" style="' + st + 'flex:1.4">' + opts(y0, y1, p && p.y, false) + '</select></span>';
+  }
+  function dsGet(w) {
+    var d = +w.querySelector('[data-p="d"]').value, m = +w.querySelector('[data-p="m"]').value, y = +w.querySelector('[data-p="y"]').value;
+    if (!(d && m && y)) return null;
+    var dim = new Date(y, m, 0).getDate(); if (d > dim) d = dim;
+    return { y: y, m: m, d: d };
+  }
+  function dsSet(w, p) {
+    var ys = w.querySelector('[data-p="y"]');
+    if (!Array.prototype.some.call(ys.options, function (o) { return o.value === String(p.y); })) { var op = document.createElement('option'); op.value = String(p.y); op.textContent = String(p.y); ys.appendChild(op); }
+    w.querySelector('[data-p="d"]').value = String(p.d); w.querySelector('[data-p="m"]').value = String(p.m); ys.value = String(p.y);
+  }
 
   async function rdLogin(c, jar, log) {
     var p = await req(c.base, 'GET', null, jar);
@@ -3924,7 +4095,7 @@ window.Papa = { parse: function (text, opts) {
       var x = base[i], a = ' data-i="' + i + '"';
       if (i === expIdx) {
         var p = parseYMD(x.value);
-        if (p || !x.value) return '<input type="date"' + a + ' value="' + (p ? isoOf(p) : '') + '" style="' + inpS + 'direction:ltr">';
+        if (p || !x.value) return dsHTML(i, p);
         return '<input type="text"' + a + ' value="' + esc(x.value) + '" style="' + inpS + 'direction:ltr">';
       }
       if (x.kind === 'checkbox') return '<label style="display:flex;align-items:center;gap:8px;margin:0"><input type="checkbox"' + a + (x.checked ? ' checked' : '') + ' style="width:auto"> ' + esc(x.label || x.name) + '</label>';
@@ -3944,7 +4115,7 @@ window.Papa = { parse: function (text, opts) {
     var curP = parseYMD(base[expIdx].value);
     var html = '<style>#rdBox{max-width:520px}#rdBox label{margin:0}</style>' +
       '<b style="font-size:17px">✏️ تعديل المشترك في الراديوس</b>' +
-      '<div style="margin-top:6px">👤 ' + esc(window.__rdRowName || user) + ' <span dir="ltr">(' + esc(user) + ')</span></div>' +
+      '<div style="margin-top:6px">👤 ' + esc(nameOf(row) || user) + ' <span dir="ltr">(' + esc(user) + ')</span></div>' +
       '<div style="margin:10px 0 2px;font-size:13px;color:#333">📅 تاريخ الانتهاء <span style="color:#777">(الحالي: <span dir="ltr">' + esc(base[expIdx].value || '—') + '</span>)</span></div>' + ctl(expIdx) +
       '<div><button type="button" id="rdP30e" style="background:#e3f2fd">+30 يوم من الانتهاء</button><button type="button" id="rdP30t" style="background:#e3f2fd">+30 يوم من اليوم</button></div>' +
       primary.map(rowHTML).join('') +
@@ -3955,7 +4126,7 @@ window.Papa = { parse: function (text, opts) {
     function el(i) { return o.querySelector('[data-i="' + i + '"]'); }
     function setRaw(i, raw) {
       var x = base[i], e = el(i); if (!e) return;
-      if (i === expIdx && e.type === 'date') { var p = parseYMD(raw); if (p) e.value = isoOf(p); return; }
+      if (i === expIdx && e.classList && e.classList.contains('rd-ds')) { var p = parseYMD(raw); if (p) dsSet(e, p); return; }
       if (x.kind === 'checkbox') e.checked = raw === '1';
       else e.value = raw.split('\u0001')[0];
     }
@@ -3964,7 +4135,7 @@ window.Papa = { parse: function (text, opts) {
       var nf = clone(base);
       Array.prototype.forEach.call(o.querySelectorAll('[data-i]'), function (e) {
         var i = +e.getAttribute('data-i'), x = nf[i]; if (!x) return;
-        if (i === expIdx && e.type === 'date') { var p = dateInputP(e.value); if (p) x.value = base[i].value ? (fmtLike(base[i].value, p) || isoOf(p)) : isoOf(p); }
+        if (i === expIdx && e.classList && e.classList.contains('rd-ds')) { var p = dsGet(e); if (p) x.value = base[i].value ? (fmtLike(base[i].value, p) || isoOf(p)) : isoOf(p); }
         else if (x.kind === 'checkbox') x.checked = e.checked;
         else if (x.kind === 'select' || x.kind === 'radio') x.value = x.multi ? Array.prototype.filter.call(e.options, function (op) { return op.selected; }).map(function (op) { return op.value; }) : [e.value];
         else x.value = e.value;
@@ -3974,8 +4145,8 @@ window.Papa = { parse: function (text, opts) {
     function presetFrom(nf, ch) { var m = {}; ch.forEach(function (d) { m[nf[d.i].name] = rawOf(nf[d.i]); }); return m; }
     o.querySelector('#rdX').onclick = function () { o.remove(); };
     o.querySelector('#rdHistLink').onclick = function (ev) { ev.preventDefault(); showLog(user); };
-    o.querySelector('#rdP30e').onclick = function () { var e = el(expIdx); if (e && e.type === 'date') e.value = isoOf(addDaysP(curP || todayP(), 30)); };
-    o.querySelector('#rdP30t').onclick = function () { var e = el(expIdx); if (e && e.type === 'date') e.value = isoOf(addDaysP(todayP(), 30)); };
+    o.querySelector('#rdP30e').onclick = function () { var e = el(expIdx); if (e && e.classList.contains('rd-ds')) dsSet(e, addDaysP(curP || todayP(), 30)); };
+    o.querySelector('#rdP30t').onclick = function () { var e = el(expIdx); if (e && e.classList.contains('rd-ds')) dsSet(e, addDaysP(todayP(), 30)); };
     o.querySelector('#rdGo').onclick = function () {
       var nf = readNew(), ch = diffFields(base, nf, f.expName);
       if (!ch.length) { toast('لا توجد تغييرات لحفظها'); return; }
@@ -4009,7 +4180,7 @@ window.Papa = { parse: function (text, opts) {
       ch.forEach(function (d) {
         var want = nf[d.i], got = findField(f2.fields, want), okf = !!got && sameVal(want, rawOf(want), rawOf(got), f.expName);
         changedNames[want.name] = 1;
-        entries.push({ u: user, f: want.name, l: d.label, from: textOf(base[d.i]), to: textOf(want), fv: rawOf(base[d.i]), tv: rawOf(want), t: now, ok: okf });
+        entries.push({ u: user, n: nameOf(row), src: 'app', f: want.name, l: d.label, from: textOf(base[d.i]), to: textOf(want), fv: rawOf(base[d.i]), tv: rawOf(want), t: now, ok: okf });
         if (!okf) failed.push(d.label + ': المتوقع ' + textOf(want) + '، الراديوس يعرض ' + (got ? textOf(got) : '—'));
       });
       pushLogs(entries);
@@ -4024,8 +4195,8 @@ window.Papa = { parse: function (text, opts) {
       /* تحديث الصف محليًا فورًا */
       ch.forEach(function (d) {
         var w = nf[d.i];
-        if (w.name === f.expName) { var np = parseYMD(w.value), disp = np ? fmtLike(row.Expiration, np) : null; if (disp) row.Expiration = disp; }
-        else if (/(srvid|service|profile|plan|package)/i.test(w.name) && row.Service !== undefined) row.Service = textOf(w);
+        if (w.name === f.expName) { var np = parseYMD(w.value), disp = np ? fmtLike(row.Expiration, np) : null; if (disp) row.Expiration = disp; if (window.__rdSnapPatch) window.__rdSnapPatch(user, w.value, null); }
+        else if (/(srvid|service|profile|plan|package)/i.test(w.name)) { if (row.Service !== undefined) row.Service = textOf(w); if (window.__rdSnapPatch) window.__rdSnapPatch(user, null, textOf(w)); }
       });
       if (window.__rdRerender) window.__rdRerender();
       var cb = document.getElementById('modalCloseBtn2'); if (cb) cb.click();
@@ -4045,40 +4216,87 @@ window.Papa = { parse: function (text, opts) {
     else showDiag({ msg: 'تعذّر تنفيذ التعديل: ' + (e && e.message ? e.message : JSON.stringify(e)), log: (log || []).concat(['آخر خطوة: ' + (window.__rdStep || '-')]), body: '' });
   }
 
-  /* ---------- سجل التعديلات ---------- */
+  /* ---------- سجل التعديلات (منظّم: يوم ← بطاقة لكل مشترك، مع فلاتر وبحث ونسخ) ---------- */
   function showLog(filterUser) {
-    var o = overlay('<style>#rdBox{max-width:560px}</style><b style="font-size:17px">📜 سجل التعديلات</b>' +
-      '<input id="rdLogQ" placeholder="بحث باسم المشترك أو الحقل..." value="' + esc(filterUser || '') + '" style="margin-top:8px;direction:rtl">' +
-      '<div id="rdLogList" style="margin-top:6px"></div>' +
-      '<div><button type="button" id="rdLogClear" style="background:#fdecea">🗑 مسح السجل</button><button type="button" id="rdX" style="background:#ddd">إغلاق</button></div>');
-    var list = o.querySelector('#rdLogList'), q = o.querySelector('#rdLogQ'), clearBtn = o.querySelector('#rdLogClear'), armed = false, shown = [];
-    function norm(e) { return e.f ? e : { u: e.u, f: 'expiration', l: 'تاريخ الانتهاء', from: e.from, to: e.to, fv: e.from, tv: e.to, t: e.t, ok: e.ok }; }
+    var o = overlay('<style>#rdBox{max-width:600px}#rdBox button.lg-chip{border:1px solid #cdd6e4;background:#fff;color:#2b2d42;border-radius:14px;padding:5px 10px;font-size:12px;margin:2px;cursor:pointer;font-family:inherit;width:auto}#rdBox button.lg-chip.on{background:#2a7de1;color:#fff;border-color:#2a7de1}.lg-card{border:1px solid #e3e8f0;border-radius:10px;padding:8px 10px;margin:6px 0}.lg-day{margin:12px 0 2px;font-weight:700;color:#1f3a5f}</style>' +
+      '<b style="font-size:17px">📜 سجل التعديلات</b><div id="rdLogSum" style="font-size:12px;color:#555;margin-top:2px"></div>' +
+      '<div id="rdLogChips" style="margin-top:6px"></div>' +
+      '<input id="rdLogQ" placeholder="بحث: اسم المشترك أو الحقل..." value="' + esc(filterUser || '') + '" style="margin-top:6px;direction:rtl">' +
+      '<div id="rdLogList"></div>' +
+      '<div><button type="button" id="rdLogCopy" style="background:#e3f2fd">📋 نسخ السجل</button><button type="button" id="rdLogClear" style="background:#fdecea">🗑 مسح السجل</button><button type="button" id="rdX" style="background:#ddd">إغلاق</button></div>');
+    var list = o.querySelector('#rdLogList'), q = o.querySelector('#rdLogQ'), chipsEl = o.querySelector('#rdLogChips'), sumEl = o.querySelector('#rdLogSum');
+    var clearBtn = o.querySelector('#rdLogClear'), armed = false, flat = [], flt = 'all', limit = 80, lastText = '';
+    var SRC = { app: '✏️ التطبيق', radius: '🔄 الراديوس', 'new': '🆕 جديد', removed: '🗑 محذوف' };
+    var CHIPS = [['all', 'الكل'], ['app', '✏️ من التطبيق'], ['radius', '🔄 من الراديوس'], ['new', '🆕 جدد'], ['removed', '🗑 محذوفون'], ['failed', '⚠️ لم تتأكد']];
+    function norm(e) {
+      var r = { u: e.u, n: e.n || '', t: e.t, src: e.src || 'app', f: e.f || 'expiration', l: e.l || 'تاريخ الانتهاء', from: e.from, to: e.to, fv: e.f ? e.fv : e.from, ok: e.ok !== false };
+      if (!r.n) { try { var rw = window.__rdFindRow ? window.__rdFindRow(e.u) : null; if (rw && window.__rdFullName) r.n = window.__rdFullName(rw); } catch (_) {} }
+      return r;
+    }
+    function match(e) {
+      if (flt === 'failed') return !e.ok;
+      return flt === 'all' || e.src === flt;
+    }
     function render() {
-      var term = q.value.trim().toLowerCase();
-      shown = readLog().map(norm).reverse().filter(function (e) { return !term || (e.u + ' ' + e.l).toLowerCase().indexOf(term) >= 0; }).slice(0, 150);
-      if (!shown.length) { list.innerHTML = '<div style="color:#777;padding:12px 0">لا توجد تعديلات مسجّلة.</div>'; return; }
-      var html = '', day = '';
-      shown.forEach(function (e, k) {
-        var d = fmtDay(e.t);
-        if (d !== day) { day = d; html += '<div style="margin-top:10px;font-weight:700;color:#1f3a5f">' + esc(d) + '</div>'; }
-        html += '<div style="border-bottom:1px solid #eee;padding:6px 0;font-size:13px"><b>' + esc(fmtHM(e.t)) + '</b> · <span dir="ltr">' + esc(e.u) + '</span> · ' + esc(e.l) +
-          '<div>من <span dir="ltr">' + esc(e.from) + '</span> إلى <b dir="ltr">' + esc(e.to) + '</b> ' + (e.ok ? '✓' : '✗ لم يتأكد') +
-          (e.ok && e.fv !== undefined ? ' <a href="#" data-k="' + k + '">↩ تراجع</a>' : '') + '</div></div>';
+      var all = readLog().map(norm), term = q.value.trim().toLowerCase(), todayStr = fmtDay(Date.now()), todayN = 0;
+      all.forEach(function (e) { if (fmtDay(e.t) === todayStr) todayN++; });
+      sumEl.textContent = 'الإجمالي: ' + all.length + ' · اليوم: ' + todayN;
+      chipsEl.innerHTML = CHIPS.map(function (c) {
+        var n = c[0] === 'all' ? all.length : all.filter(function (e) { return c[0] === 'failed' ? !e.ok : e.src === c[0]; }).length;
+        return '<button type="button" class="lg-chip' + (flt === c[0] ? ' on' : '') + '" data-f="' + c[0] + '">' + c[1] + ' ' + n + '</button>';
+      }).join('');
+      var rows = all.slice().reverse().filter(function (e) { return match(e) && (!term || (e.u + ' ' + e.n + ' ' + e.l).toLowerCase().indexOf(term) >= 0); });
+      flat = []; lastText = '';
+      if (!rows.length) { list.innerHTML = '<div style="color:#777;padding:12px 0">لا توجد تعديلات مطابقة.</div>'; return; }
+      var groups = [], cur = null;
+      rows.forEach(function (e) {
+        var key = e.u + '|' + e.t + '|' + e.src;
+        if (!cur || cur.key !== key) { cur = { key: key, e: e, items: [] }; groups.push(cur); }
+        cur.items.push(e);
       });
+      var html = '', day = '', dayN = {};
+      groups.forEach(function (g) { var d = fmtDay(g.e.t); dayN[d] = (dayN[d] || 0) + g.items.length; });
+      groups.slice(0, limit).forEach(function (g) {
+        var e = g.e, d = fmtDay(e.t);
+        if (d !== day) { day = d; html += '<div class="lg-day">' + esc(d) + ' <span style="font-weight:400;color:#667;font-size:12px">(' + dayN[d] + ')</span></div>'; }
+        html += '<div class="lg-card"><div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline"><div><b>' + esc(e.n || e.u) + '</b> <span dir="ltr" style="color:#667;font-size:12px">' + esc(e.u) + '</span></div>' +
+          '<div style="font-size:12px;color:#556;white-space:nowrap">' + esc(fmtHM(e.t)) + ' · ' + (SRC[e.src] || e.src) + '</div></div>';
+        g.items.forEach(function (it) {
+          lastText += fmtDay(it.t) + ' ' + fmtHM(it.t) + ' | ' + (it.n || '') + ' (' + it.u + ') | ' + (SRC[it.src] || it.src) + ' | ' + it.l + (it.src === 'new' ? ': ' + it.to : it.src === 'removed' ? ': ' + it.from : ': ' + it.from + ' -> ' + it.to) + (it.ok ? '' : ' | لم يتأكد') + '\n';
+          var k = flat.push(it) - 1, line;
+          if (it.src === 'new') line = '🆕 مشترك جديد <span dir="ltr">' + esc(it.to || '') + '</span>';
+          else if (it.src === 'removed') line = '🗑 حُذف من الراديوس <span dir="ltr">' + esc(it.from || '') + '</span>';
+          else line = esc(it.l) + ': من <span dir="ltr">' + esc(it.from) + '</span> إلى <b dir="ltr">' + esc(it.to) + '</b> ' + (it.ok ? '✓' : '✗ لم يتأكد') +
+            (it.src === 'app' && it.ok && it.fv !== undefined ? ' <a href="#" data-k="' + k + '">↩ تراجع</a>' : '');
+          html += '<div style="font-size:13px;margin-top:4px">' + line + '</div>';
+        });
+        html += '</div>';
+      });
+      if (groups.length > limit) html += '<div style="text-align:center"><button type="button" id="rdLogMore" style="background:#e3f2fd">عرض المزيد (' + (groups.length - limit) + ')</button></div>';
       list.innerHTML = html;
+      var mb = list.querySelector('#rdLogMore'); if (mb) mb.onclick = function () { limit += 80; render(); };
     }
     render();
-    q.oninput = render;
+    q.oninput = function () { limit = 80; render(); };
+    chipsEl.onclick = function (ev) { var b = ev.target.closest ? ev.target.closest('[data-f]') : null; if (!b) return; flt = b.getAttribute('data-f'); limit = 80; render(); };
     list.onclick = function (ev) {
       var a = ev.target.closest ? ev.target.closest('[data-k]') : null; if (!a) return;
       ev.preventDefault();
-      var e = shown[+a.getAttribute('data-k')]; if (!e) return;
+      var e = flat[+a.getAttribute('data-k')]; if (!e) return;
       var r = window.__rdFindRow ? window.__rdFindRow(e.u) : null;
       if (!r) { toast('هذا المشترك غير موجود في القائمة الحالية'); return; }
       o.remove();
       var pre = {}; pre[e.f] = e.fv;
       window.__rdRow = r;
       editSubscriber(r, pre).catch(function (err) { editFail(err, []); });
+    };
+    o.querySelector('#rdLogCopy').onclick = function () {
+      var ta = document.createElement('textarea'); ta.value = lastText || ''; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta); ta.select();
+      var okc = false; try { okc = document.execCommand('copy'); } catch (_) {}
+      ta.remove();
+      if (!okc && navigator.clipboard) { try { navigator.clipboard.writeText(lastText || ''); okc = true; } catch (_) {} }
+      toast(okc ? '📋 تم نسخ السجل' : 'تعذّر النسخ');
     };
     clearBtn.onclick = function () {
       if (!armed) { armed = true; clearBtn.textContent = 'اضغط مرة أخرى للتأكيد'; return; }
