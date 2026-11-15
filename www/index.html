@@ -594,6 +594,7 @@ window.Papa = { parse: function (text, opts) {
   .status-chip{border:1px solid #cdd6e4;background:#fff;border-radius:16px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit;color:#2b2d42;}
   .status-chip.active{background:#2a7de1;color:#fff;border-color:#2a7de1;}
   .on-dot{font-size:11px;margin:0 2px;}
+  .chg-badge{font-size:12px;margin:0 2px;cursor:pointer;}
   .new-badge{font-size:11px;margin:0 2px;}
   a.cur-ip{color:#1a5fb4;text-decoration:underline;}
   .col-prices { width: 10%; } .col-curip { width: 9%; }
@@ -2184,7 +2185,7 @@ window.Papa = { parse: function (text, opts) {
           p[2] = nm;
         });
         goneK.forEach(k => { const p = prev[k]; ev.push({ u: k, n: p[2], src: 'removed', f: 'removed', l: 'حُذف من الراديوس', from: p[1] || '', to: '', t: now, ok: true }); delete prev[k]; });
-        if (ev.length) { try { const a = JSON.parse(localStorage.getItem(SNAP_LOG_KEY) || '[]').concat(ev); localStorage.setItem(SNAP_LOG_KEY, JSON.stringify(a.slice(-1500))); } catch (_) {} }
+        if (ev.length) { try { const a = JSON.parse(localStorage.getItem(SNAP_LOG_KEY) || '[]').concat(ev); localStorage.setItem(SNAP_LOG_KEY, JSON.stringify(a.slice(-1500))); } catch (_) {} window.__rdLogVer = (window.__rdLogVer || 0) + 1; }
         snap.at = now;
         try { localStorage.setItem(SNAP_KEY, JSON.stringify(snap)); } catch (_) {}
       }
@@ -2239,6 +2240,100 @@ window.Papa = { parse: function (text, opts) {
     new MutationObserver(() => w.classList.toggle('search-active', input.classList.contains('search-active'))).observe(input, { attributes: true, attributeFilter: ['class'] });
     sync();
   }
+
+
+  /* ===== أيقونات التغييرات (تأجيل / تغيير باقة) + سجل المشترك + سطر التأجيل ===== */
+  const RD_WD = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const RD_PKG_DAYS = 14;
+  function rdWd(ms) { return RD_WD[new Date(ms).getDay()]; }
+  function rdKeyOf(ms) { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function rdDmy(ms) { const d = new Date(ms); return String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear(); }
+  function rdHm(ms) { const d = new Date(ms); return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  function rdPdWord(n) { return n === 1 ? 'يوم واحد' : n === 2 ? 'يومين' : n + (n <= 10 ? ' أيام' : ' يومًا'); }
+  function rdDaysBetweenMs(a, b) { const A = new Date(a), B = new Date(b); return Math.round((Date.UTC(B.getFullYear(), B.getMonth(), B.getDate()) - Date.UTC(A.getFullYear(), A.getMonth(), A.getDate())) / 86400000); }
+
+  let rdChgCache = null;
+  function rdChgIndex() {
+    const ver = window.__rdLogVer || 0;
+    if (rdChgCache && rdChgCache.ver === ver) return rdChgCache.idx;
+    let log = []; try { log = JSON.parse(localStorage.getItem('rdExpLog') || '[]'); } catch (_) {}
+    const idx = {};
+    log.forEach(e => {
+      if (!e || e.ok === false) return;
+      const k = String(e.u || '').trim().toLowerCase(); if (!k) return;
+      const o = idx[k] || (idx[k] = { pp: null, pkg: null, events: [] });
+      o.events.push(e);
+      if (e.kind === 'postpone') o.pp = e;
+      if (e.f === 'service' || e.kind === 'package') o.pkg = e;
+    });
+    rdChgCache = { ver: ver, idx: idx };
+    return idx;
+  }
+  /* تأجيل فعّال: آخر تأجيل ما دام تاريخ انتهاء المشترك الحالي هو نفس تاريخ التأجيل (لم يُجدَّد بعده) */
+  function rdPostponeFor(row) {
+    const o = rdChgIndex()[String(row['User name'] || '').trim().toLowerCase()];
+    if (!o || !o.pp) return null;
+    const e = o.pp, toMs = rdParseMs(e.to), fromMs = rdParseMs(e.from);
+    if (!toMs || snapDateKey(row.Expiration) !== snapDateKey(e.to)) return null;
+    const days = e.pd || (fromMs ? rdDaysBetweenMs(fromMs, toMs) : 0);
+    return { days: days, fromKey: fromMs ? rdKeyOf(fromMs) : '', toKey: rdKeyOf(toMs), line: 'تم التأجيل ' + rdPdWord(days) + ' لغاية يوم ' + rdWd(toMs) + ' ' + rdDmy(toMs), t: e.t };
+  }
+  function rdChgBadges(row) {
+    const u = String(row['User name'] || '').trim(); if (!u) return '';
+    let h = '';
+    const pp = rdPostponeFor(row);
+    if (pp) h += '<span class="chg-badge pp" data-u="' + escapeHtml(u) + '" title="' + escapeHtml(pp.line) + '">⏳</span>';
+    const o = rdChgIndex()[u.toLowerCase()];
+    if (o && o.pkg && (Date.now() - o.pkg.t) <= RD_PKG_DAYS * 86400000) {
+      h += '<span class="chg-badge pk" data-u="' + escapeHtml(u) + '" title="' + escapeHtml('تغيّرت الباقة من ' + o.pkg.from + ' إلى ' + o.pkg.to) + '">🔁</span>';
+    }
+    return h;
+  }
+  function rdEvLine(e) {
+    const fm = rdParseMs(e.from), tm = rdParseMs(e.to), A = escapeHtml;
+    let main;
+    if (e.src === 'new') main = '🆕 مشترك جديد' + (e.to ? ' — <span dir="ltr">' + A(e.to) + '</span>' : '');
+    else if (e.src === 'removed') main = '🗑 حُذف من الراديوس';
+    else if (e.f === 'expiration' && fm && tm) {
+      const n = rdDaysBetweenMs(fm, tm);
+      const dt = ms => '<b style="white-space:nowrap">' + rdWd(ms) + ' <bdi dir="ltr">' + rdKeyOf(ms) + '</bdi></b>';
+      const span = 'من ' + dt(fm) + ' إلى ' + dt(tm) + ' <span style="white-space:nowrap">(' + (n > 0 ? rdPdWord(n) : n < 0 ? 'نقص ' + rdPdWord(-n) : 'بدون تغيير') + ')</span>';
+      main = e.kind === 'postpone' ? '⏳ تأجيل ' + rdPdWord(e.pd || Math.abs(n)) + ': ' + span : '📅 تغيّر تاريخ الانتهاء ' + span;
+    }
+    else if (e.f === 'service' || e.kind === 'package') main = '🔁 تغيّرت الباقة من <b dir="ltr">' + A(e.from) + '</b> إلى <b dir="ltr">' + A(e.to) + '</b>';
+    else main = '✏️ ' + A(e.l || e.f) + ': من <span dir="ltr">' + A(e.from) + '</span> إلى <b dir="ltr">' + A(e.to) + '</b>';
+    const src = e.src === 'radius' ? '🔄 الراديوس' : e.src === 'new' ? '🆕' : e.src === 'removed' ? '🗑' : '✏️ التطبيق';
+    return '<div style="border-bottom:1px solid #eee;padding:8px 0"><div style="font-size:14px;line-height:1.7">' + main + '</div><div style="font-size:11px;color:#778;margin-top:2px">' + rdDmy(e.t) + ' ' + rdHm(e.t) + ' · ' + src + '</div></div>';
+  }
+  function rdShowHistory(user) {
+    const k = String(user || '').trim().toLowerCase();
+    const row = window.__rdFindRow ? window.__rdFindRow(user) : null;
+    const evs = ((rdChgIndex()[k] || {}).events || []).slice().reverse();
+    const old = document.getElementById('rdHistOv'); if (old) old.remove();
+    const ov = document.createElement('div'); ov.id = 'rdHistOv';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9700;display:flex;align-items:center;justify-content:center;padding:12px;';
+    const pp = row ? rdPostponeFor(row) : null;
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px;width:100%;max-width:520px;max-height:90vh;overflow:auto;direction:rtl;">' +
+      '<b style="font-size:17px">📜 سجل المشترك</b>' +
+      '<div style="margin-top:4px">👤 <b>' + escapeHtml(row ? getFullName(row) : user) + '</b> <span dir="ltr" style="color:#667;font-size:12px">(' + escapeHtml(user) + ')</span></div>' +
+      (pp ? '<div style="margin-top:6px;color:#b45309;font-weight:700">⏳ ' + escapeHtml(pp.line).replace(/(\d{2}-\d{2}-\d{4})/, '<bdi dir="ltr">$1</bdi>') + '</div>' : '') +
+      '<div style="margin-top:6px">' + (evs.map(rdEvLine).join('') || '<div style="color:#777;padding:10px 0">لا توجد تغييرات مسجّلة لهذا المشترك.</div>') + '</div>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button type="button" id="rdHistFull" style="border:0;border-radius:8px;padding:10px 14px;font-size:15px;background:#e3f2fd;cursor:pointer">📜 السجل الكامل</button>' +
+      '<button type="button" id="rdHistX" style="border:0;border-radius:8px;padding:10px 14px;font-size:15px;background:#ddd;cursor:pointer">إغلاق</button></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    ov.querySelector('#rdHistX').onclick = () => ov.remove();
+    const fb = ov.querySelector('#rdHistFull');
+    if (window.__rdShowLog) fb.onclick = () => { ov.remove(); window.__rdShowLog(user); }; else fb.style.display = 'none';
+  }
+  window.__rdShowHistory = rdShowHistory;
+  document.addEventListener('click', function (e) {
+    const b = e.target && e.target.closest ? e.target.closest('.chg-badge') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    rdShowHistory(b.getAttribute('data-u'));
+  }, true);
 
 
   /* ========== منطق الأسعار ========== */
@@ -2866,7 +2961,7 @@ window.Papa = { parse: function (text, opts) {
           val = (username && username !== '-'
                   ? `<button type="button" class="fav-btn ${isFav ? 'active' : ''}" data-username="${escapeHtml(username)}" title="${favTitle}">${favIcon}</button>`
                   : '') +
-                rdOnlineDot(username) + rdNewBadge(row) + `<span class="clickable-name" title="انقر لعرض التفاصيل">${escapeHtml(fn)}</span>`;
+                rdOnlineDot(username) + rdNewBadge(row) + rdChgBadges(row) + `<span class="clickable-name" title="انقر لعرض التفاصيل">${escapeHtml(fn)}</span>`;
           tdClass = 'td-fullname';
         }
         else if (col === 'User name') {
@@ -3008,6 +3103,9 @@ window.Papa = { parse: function (text, opts) {
     window.__rdRow = row; window.__rdRowName = fn;
     modalTitle.textContent = `👤 ${fn}`;
     const expDate = row.Expiration || '—';
+    const ppx = rdPostponeFor(row);
+    const expDisp = ppx && ppx.fromKey ? ppx.fromKey : expDate;
+    const ppHtml = ppx ? '<p style="color:#b45309;font-weight:700;margin:2px 0;">⏳ ' + escapeHtml(ppx.line).replace(/(\d{2}-\d{2}-\d{4})/, '<bdi dir="ltr">$1</bdi>') + '</p>' : '';
     const blockVal = row._block !== null ? row._block : '—';
     const houseVal = row._house !== null ? row._house : '—';
     const speedVal = row._speed || row.Service || '—';
@@ -3017,7 +3115,8 @@ window.Papa = { parse: function (text, opts) {
       <div class="modal-section">
         <p>👤 <strong>الاسم:</strong> ${escapeHtml(fn)}</p>
         <p>🏠 <strong>الحارة:</strong> ${escapeHtml(blockVal)} | <strong>البيت:</strong> ${escapeHtml(houseVal)}</p>
-        <p class="section-gap">📅 <strong>تاريخ الانتهاء:</strong> ${escapeHtml(expDate)}</p>
+        <p class="section-gap">📅 <strong>تاريخ الانتهاء:</strong> <bdi dir="ltr">${escapeHtml(expDisp)}</bdi></p>
+        ${ppHtml}
         <p>📊 <strong>الحالة:</strong> ${getStatusText(expDate)}</p>
         <p class="section-gap">📡 <strong>السرعة:</strong> <span style="color:#2a7de1;font-weight:700;">${escapeHtml(speedVal)}</span></p>
         <p>💰 <strong>التسعير:</strong>
@@ -3048,11 +3147,12 @@ window.Papa = { parse: function (text, opts) {
   modalCopyBtn.addEventListener('click', function () {
     if (!currentModalRow) return;
     const r = currentModalRow;
+    const ppc = rdPostponeFor(r);
     const text =
 `👤 الاسم: ${getFullName(r)}
 🏠 الحارة: ${r._block !== null ? r._block : '—'}  |  البيت: ${r._house !== null ? r._house : '—'}
 
-📅 تاريخ الانتهاء: ${r.Expiration || '—'}
+📅 تاريخ الانتهاء: ${ppc && ppc.fromKey ? ppc.fromKey : (r.Expiration || '—')}${ppc ? '\n' + ppc.line : ''}
 📊 الحالة: ${getStatusTextPlain(r.Expiration || '')}
 
 📡 السرعة: ${r._speed || r.Service || '—'}
@@ -3893,11 +3993,22 @@ window.Papa = { parse: function (text, opts) {
   function todayP() { var t = new Date(); return { y: t.getFullYear(), m: t.getMonth() + 1, d: t.getDate() }; }
   function dateInputP(v) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ''); return m ? { y: +m[1], m: +m[2], d: +m[3] } : null; }
   function readLog() { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (_) { return []; } }
-  function pushLogs(list) { try { var a = readLog().concat(list); localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(-1500))); } catch (_) {} }
+  function pushLogs(list) { try { var a = readLog().concat(list); localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(-1500))); } catch (_) {} window.__rdLogVer = (window.__rdLogVer || 0) + 1; }
   function fmtHM(t) { var d = new Date(t); return d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
   function fmtDay(t) { var d = new Date(t); return d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear(); }
   function rmToast() { var t = document.getElementById('rdToast'); if (t) t.remove(); }
   function clone(x) { return JSON.parse(JSON.stringify(x)); }
+  var WD = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  function wdOf(p) { return WD[new Date(p.y, p.m - 1, p.d).getDay()]; }
+  function dmyOf(p) { return padN(p.d, 2) + '-' + padN(p.m, 2) + '-' + p.y; }
+  function daysBetween(a, b) { return Math.round((Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d)) / 86400000); }
+  function pdWord(n) { return n === 1 ? 'يوم واحد' : n === 2 ? 'يومين' : n + (n <= 10 ? ' أيام' : ' يومًا'); }
+  function ppLine(n, p) { return 'تم التأجيل ' + pdWord(n) + ' لغاية يوم ' + wdOf(p) + ' ' + dmyOf(p); }
+  /* التأجيل = تاريخ اليوم + n، وإن صادف الجمعة (عطلة) نضيف يومًا ليصير السبت */
+  function ppTarget(n) { var p = addDaysP(todayP(), n), fri = new Date(p.y, p.m - 1, p.d).getDay() === 5; if (fri) p = addDaysP(p, 1); return { p: p, fri: fri }; }
+  function isPkgField(x) {
+    return (x.kind === 'select' || x.kind === 'radio') && (/(srvid|service|profile|plan|package|speed|group)/i.test(x.name) || /(service|package|plan|profile|speed|باقة|سرعة|خدمة)/i.test(x.label || ''));
+  }
   function nameOf(row) { try { return window.__rdFullName ? window.__rdFullName(row) : ''; } catch (_) { return ''; } }
   /* منتقي تاريخ بأرقام إنكليزية دائمًا (بدل حقل التاريخ الأصلي الذي يتبع لغة الجهاز) */
   function dsHTML(i, p) {
@@ -4118,6 +4229,7 @@ window.Papa = { parse: function (text, opts) {
       '<div style="margin-top:6px">👤 ' + esc(nameOf(row) || user) + ' <span dir="ltr">(' + esc(user) + ')</span></div>' +
       '<div style="margin:10px 0 2px;font-size:13px;color:#333">📅 تاريخ الانتهاء <span style="color:#777">(الحالي: <span dir="ltr">' + esc(base[expIdx].value || '—') + '</span>)</span></div>' + ctl(expIdx) +
       '<div><button type="button" id="rdP30e" style="background:#e3f2fd">+30 يوم من الانتهاء</button><button type="button" id="rdP30t" style="background:#e3f2fd">+30 يوم من اليوم</button></div>' +
+      '<div><button type="button" id="rdPp2" style="background:#fff3e0">⏳ تأجيل يومين</button><button type="button" id="rdPp7" style="background:#fff3e0">⏳ تأجيل أسبوع</button></div><div id="rdPpNote" style="font-size:13px;color:#b45309;margin-top:4px;font-weight:700"></div>' +
       primary.map(rowHTML).join('') +
       (others.length ? '<details style="margin-top:10px"><summary style="cursor:pointer">حقول أخرى (' + others.length + ')</summary>' + others.map(rowHTML).join('') + '</details>' : '') +
       '<div style="margin-top:6px"><a href="#" id="rdHistLink">📜 سجل تعديلات هذا المشترك</a></div>' +
@@ -4142,30 +4254,47 @@ window.Papa = { parse: function (text, opts) {
       });
       return nf;
     }
-    function presetFrom(nf, ch) { var m = {}; ch.forEach(function (d) { m[nf[d.i].name] = rawOf(nf[d.i]); }); return m; }
+    function presetFrom(nf, ch, pp) { var m = {}; ch.forEach(function (d) { m[nf[d.i].name] = rawOf(nf[d.i]); }); if (pp) m.__pp = { to: isoOf(pp.to), days: pp.days, p: pp.to }; return m; }
     o.querySelector('#rdX').onclick = function () { o.remove(); };
     o.querySelector('#rdHistLink').onclick = function (ev) { ev.preventDefault(); showLog(user); };
-    o.querySelector('#rdP30e').onclick = function () { var e = el(expIdx); if (e && e.classList.contains('rd-ds')) dsSet(e, addDaysP(curP || todayP(), 30)); };
-    o.querySelector('#rdP30t').onclick = function () { var e = el(expIdx); if (e && e.classList.contains('rd-ds')) dsSet(e, addDaysP(todayP(), 30)); };
+    var pendingPP = null, noteEl = o.querySelector('#rdPpNote');
+    function clearPP() { pendingPP = null; noteEl.textContent = ''; }
+    Array.prototype.forEach.call(o.querySelectorAll('.rd-ds select'), function (sl) { sl.addEventListener('change', clearPP); });
+    function doPP(n) {
+      var w = el(expIdx); if (!w || !w.classList.contains('rd-ds')) { toast('حقل الانتهاء غير قابل للتأجيل'); return; }
+      var t = ppTarget(n), diff = curP ? daysBetween(curP, t.p) : n;
+      if (curP && diff <= 0) { toast('تاريخ الانتهاء الحالي أبعد من تاريخ التأجيل، لا حاجة للتأجيل'); return; }
+      dsSet(w, t.p);
+      pendingPP = { to: isoOf(t.p), days: diff, p: t.p };
+      noteEl.textContent = '⏳ ' + ppLine(diff, t.p) + (t.fri ? ' (أُضيف يوم لأن الجمعة عطلة)' : '');
+    }
+    o.querySelector('#rdPp2').onclick = function () { doPP(2); };
+    o.querySelector('#rdPp7').onclick = function () { doPP(7); };
+    if (preset && preset.__pp) { pendingPP = preset.__pp; noteEl.textContent = '⏳ ' + ppLine(pendingPP.days, pendingPP.p); }
+    o.querySelector('#rdP30e').onclick = function () { clearPP(); var e = el(expIdx); if (e && e.classList.contains('rd-ds')) dsSet(e, addDaysP(curP || todayP(), 30)); };
+    o.querySelector('#rdP30t').onclick = function () { clearPP(); var e = el(expIdx); if (e && e.classList.contains('rd-ds')) dsSet(e, addDaysP(todayP(), 30)); };
     o.querySelector('#rdGo').onclick = function () {
       var nf = readNew(), ch = diffFields(base, nf, f.expName);
       if (!ch.length) { toast('لا توجد تغييرات لحفظها'); return; }
+      var ppInfo = null;
+      if (pendingPP && expIdx >= 0) { var npp = parseYMD(nf[expIdx].value); if (npp && isoOf(npp) === pendingPP.to) ppInfo = { days: pendingPP.days, to: pendingPP.p }; }
       var hasUser = base.some(function (x) { return (x.kind === 'hidden' || x.kind === 'text') && String(x.value).trim().toLowerCase() === user.toLowerCase(); });
       var tested = false; try { tested = localStorage.getItem(TESTED_KEY) === '1'; } catch (_) {}
       var lines = ch.map(function (d) {
         return '<div style="padding:5px 0;border-bottom:1px solid #eee"><b>' + esc(d.label) + '</b><div>من: <span dir="ltr">' + esc(textOf(base[d.i])) + '</span></div><div>إلى: <b dir="ltr" style="color:#2e7d32">' + esc(textOf(nf[d.i])) + '</b></div></div>';
       }).join('');
       var o2 = overlay('<b>تأكيد التعديلات في الراديوس</b><div style="margin-top:6px">👤 <span dir="ltr">' + esc(user) + '</span></div>' + lines +
+        (ppInfo ? '<div style="color:#b45309;font-weight:700;margin-top:6px">⏳ ' + esc(ppLine(ppInfo.days, ppInfo.to)) + '</div>' : '') +
         (hasUser ? '' : '<div style="color:#c00;margin-top:6px">⚠️ لم أجد اسم المشترك ضمن حقول الصفحة، تأكد من صحة الصفحة.</div>') +
         (tested ? '' : '<div style="color:#c60;margin-top:6px">⚠️ أول استخدام: جرّبه على مشترك تجريبي أولًا.</div>') +
         '<div><button type="button" id="rdOk" style="background:#2e7d32;color:#fff">✅ تأكيد وحفظ</button><button type="button" id="rdBack" style="background:#e3f2fd">رجوع</button><button type="button" id="rdX" style="background:#ddd">إلغاء</button></div>');
       o2.querySelector('#rdX').onclick = function () { o2.remove(); };
-      o2.querySelector('#rdBack').onclick = function () { showEditor(row, user, c, jar, log, f, editUrl, presetFrom(nf, ch)); };
-      o2.querySelector('#rdOk').onclick = function () { o2.remove(); saveEdit(row, user, c, jar, log, f, base, nf, ch, editUrl); };
+      o2.querySelector('#rdBack').onclick = function () { showEditor(row, user, c, jar, log, f, editUrl, presetFrom(nf, ch, ppInfo)); };
+      o2.querySelector('#rdOk').onclick = function () { o2.remove(); saveEdit(row, user, c, jar, log, f, base, nf, ch, editUrl, ppInfo); };
     };
   }
 
-  async function saveEdit(row, user, c, jar, log, f, base, nf, ch, editUrl) {
+  async function saveEdit(row, user, c, jar, log, f, base, nf, ch, editUrl, ppInfo) {
     try {
       toast('⏳ جاري الحفظ في الراديوس...', 90000);
       var send = toPairs(nf); if (f.submit) send.push(f.submit);
@@ -4181,6 +4310,8 @@ window.Papa = { parse: function (text, opts) {
         var want = nf[d.i], got = findField(f2.fields, want), okf = !!got && sameVal(want, rawOf(want), rawOf(got), f.expName);
         changedNames[want.name] = 1;
         entries.push({ u: user, n: nameOf(row), src: 'app', f: want.name, l: d.label, from: textOf(base[d.i]), to: textOf(want), fv: rawOf(base[d.i]), tv: rawOf(want), t: now, ok: okf });
+        if (isPkgField(want)) entries[entries.length - 1].kind = 'package';
+        if (ppInfo && want.name === f.expName) { entries[entries.length - 1].kind = 'postpone'; entries[entries.length - 1].pd = ppInfo.days; }
         if (!okf) failed.push(d.label + ': المتوقع ' + textOf(want) + '، الراديوس يعرض ' + (got ? textOf(got) : '—'));
       });
       pushLogs(entries);
@@ -4205,7 +4336,7 @@ window.Papa = { parse: function (text, opts) {
         var o = overlay('<b>✅ تم حفظ التعديلات</b><div style="color:#c60;margin-top:6px">⚠️ تغيّرت حقول أخرى بعد الحفظ (قد يكون هذا طبيعيًا)، راجعها في الراديوس:</div><pre>' + esc(extra.join(', ')) + '</pre><button id="rdX" style="background:#ddd">حسنًا</button>');
         o.querySelector('#rdX').onclick = function () { o.remove(); };
       } else {
-        toast('✅ تم الحفظ في الراديوس (' + ch.length + (ch.length === 1 ? ' تعديل)' : ' تعديلات)'), 4000);
+        toast(ppInfo ? '✅ ⏳ ' + ppLine(ppInfo.days, ppInfo.to) : '✅ تم الحفظ في الراديوس (' + ch.length + (ch.length === 1 ? ' تعديل)' : ' تعديلات)'), 4500);
       }
       setTimeout(refresh, 800);
     } catch (e) { editFail(e, log); }
@@ -4227,14 +4358,20 @@ window.Papa = { parse: function (text, opts) {
     var list = o.querySelector('#rdLogList'), q = o.querySelector('#rdLogQ'), chipsEl = o.querySelector('#rdLogChips'), sumEl = o.querySelector('#rdLogSum');
     var clearBtn = o.querySelector('#rdLogClear'), armed = false, flat = [], flt = 'all', limit = 80, lastText = '';
     var SRC = { app: '✏️ التطبيق', radius: '🔄 الراديوس', 'new': '🆕 جديد', removed: '🗑 محذوف' };
-    var CHIPS = [['all', 'الكل'], ['app', '✏️ من التطبيق'], ['radius', '🔄 من الراديوس'], ['new', '🆕 جدد'], ['removed', '🗑 محذوفون'], ['failed', '⚠️ لم تتأكد']];
+    var CHIPS = [['all', 'الكل'], ['app', '✏️ من التطبيق'], ['radius', '🔄 من الراديوس'], ['new', '🆕 جدد'], ['removed', '🗑 محذوفون'], ['postpone', '⏳ تأجيلات'], ['failed', '⚠️ لم تتأكد']];
     function norm(e) {
-      var r = { u: e.u, n: e.n || '', t: e.t, src: e.src || 'app', f: e.f || 'expiration', l: e.l || 'تاريخ الانتهاء', from: e.from, to: e.to, fv: e.f ? e.fv : e.from, ok: e.ok !== false };
+      var r = { u: e.u, n: e.n || '', kind: e.kind, pd: e.pd, t: e.t, src: e.src || 'app', f: e.f || 'expiration', l: e.l || 'تاريخ الانتهاء', from: e.from, to: e.to, fv: e.f ? e.fv : e.from, ok: e.ok !== false };
       if (!r.n) { try { var rw = window.__rdFindRow ? window.__rdFindRow(e.u) : null; if (rw && window.__rdFullName) r.n = window.__rdFullName(rw); } catch (_) {} }
       return r;
     }
+    function dayCnt(it) {
+      if (it.f !== 'expiration') return '';
+      var pa = parseYMD(it.from), pb = parseYMD(it.to); if (!pa || !pb) return '';
+      var nn = daysBetween(pa, pb); return ' <span style="white-space:nowrap">(' + (nn > 0 ? pdWord(nn) : nn < 0 ? 'نقص ' + pdWord(-nn) : 'بدون تغيير') + ')</span>';
+    }
     function match(e) {
       if (flt === 'failed') return !e.ok;
+      if (flt === 'postpone') return e.kind === 'postpone';
       return flt === 'all' || e.src === flt;
     }
     function render() {
@@ -4242,7 +4379,7 @@ window.Papa = { parse: function (text, opts) {
       all.forEach(function (e) { if (fmtDay(e.t) === todayStr) todayN++; });
       sumEl.textContent = 'الإجمالي: ' + all.length + ' · اليوم: ' + todayN;
       chipsEl.innerHTML = CHIPS.map(function (c) {
-        var n = c[0] === 'all' ? all.length : all.filter(function (e) { return c[0] === 'failed' ? !e.ok : e.src === c[0]; }).length;
+        var n = c[0] === 'all' ? all.length : all.filter(function (e) { return c[0] === 'failed' ? !e.ok : c[0] === 'postpone' ? e.kind === 'postpone' : e.src === c[0]; }).length;
         return '<button type="button" class="lg-chip' + (flt === c[0] ? ' on' : '') + '" data-f="' + c[0] + '">' + c[1] + ' ' + n + '</button>';
       }).join('');
       var rows = all.slice().reverse().filter(function (e) { return match(e) && (!term || (e.u + ' ' + e.n + ' ' + e.l).toLowerCase().indexOf(term) >= 0); });
@@ -4266,7 +4403,7 @@ window.Papa = { parse: function (text, opts) {
           var k = flat.push(it) - 1, line;
           if (it.src === 'new') line = '🆕 مشترك جديد <span dir="ltr">' + esc(it.to || '') + '</span>';
           else if (it.src === 'removed') line = '🗑 حُذف من الراديوس <span dir="ltr">' + esc(it.from || '') + '</span>';
-          else line = esc(it.l) + ': من <span dir="ltr">' + esc(it.from) + '</span> إلى <b dir="ltr">' + esc(it.to) + '</b> ' + (it.ok ? '✓' : '✗ لم يتأكد') +
+          else line = (it.kind === 'postpone' ? '⏳ تأجيل ' + esc(pdWord(it.pd || 0)) + ' — ' : '') + esc(it.l) + ': من <span dir="ltr">' + esc(it.from) + '</span> إلى <b dir="ltr">' + esc(it.to) + '</b>' + dayCnt(it) + ' ' + (it.ok ? '✓' : '✗ لم يتأكد') +
             (it.src === 'app' && it.ok && it.fv !== undefined ? ' <a href="#" data-k="' + k + '">↩ تراجع</a>' : '');
           html += '<div style="font-size:13px;margin-top:4px">' + line + '</div>';
         });
@@ -4301,10 +4438,12 @@ window.Papa = { parse: function (text, opts) {
     clearBtn.onclick = function () {
       if (!armed) { armed = true; clearBtn.textContent = 'اضغط مرة أخرى للتأكيد'; return; }
       try { localStorage.removeItem(LOG_KEY); } catch (_) {}
+      window.__rdLogVer = (window.__rdLogVer || 0) + 1;
       render(); armed = false; clearBtn.textContent = '🗑 مسح السجل';
     };
     o.querySelector('#rdX').onclick = function () { o.remove(); };
   }
+  window.__rdShowLog = showLog;
   (function () {
     var lb = document.getElementById('logBtn');
     if (lb) { lb.style.display = 'inline-flex'; lb.addEventListener('click', function () { showLog(''); }); }
