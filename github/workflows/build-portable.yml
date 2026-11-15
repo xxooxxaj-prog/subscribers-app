@@ -1,1 +1,23 @@
-
+name: Build portable (Windows exe)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'www/index.html'
+      - 'portable/**'
+      - '.github/workflows/build-portable.yml'
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyinstaller
+      - run: pyinstaller --onefile --name 777-Subscribers --add-data "www/index.html;." portable/server.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 777-Subscribers-portable
+          path: dist/777-Subscribers.exe
