@@ -2336,6 +2336,159 @@ window.Papa = { parse: function (text, opts) {
   }, true);
 
 
+  /* ===== دخول الراوتر عند فتح Current IP ===== */
+  const RT_CREDS_KEY = 'rdRouterCreds', RT_MAP_KEY = 'rdRouterMap';
+  const RT_DEFAULT = [{ u: 'ma999', p: 'ma999' }, { u: '', p: 'ma999ma999' }, { u: '', p: 'yasar2026' }, { u: 'ubnt', p: 'yasar2026' }];
+  function rtCreds() {
+    try { const a = JSON.parse(localStorage.getItem(RT_CREDS_KEY) || 'null'); if (Array.isArray(a) && a.length) { const r = a.filter(c => c && typeof c.p === 'string' && c.p !== ''); if (r.length) return r; } } catch (_) {}
+    return RT_DEFAULT.map(c => Object.assign({}, c));
+  }
+  function rtMap() { try { return JSON.parse(localStorage.getItem(RT_MAP_KEY) || '{}') || {}; } catch (_) { return {}; } }
+  function rtSetMap(ip, v) { const m = rtMap(); if (v) m[ip] = v; else delete m[ip]; try { localStorage.setItem(RT_MAP_KEY, JSON.stringify(m)); } catch (_) {} }
+  function rtCap() { try { return (window.top && window.top.Capacitor) || window.Capacitor || null; } catch (_) { return window.Capacitor || null; } }
+  function rtLabel(c) { return c.u ? c.u + ' / ' + c.p : 'كلمة المرور فقط: ' + c.p; }
+  function rtLabelHTML(c) { return c.u ? '<bdi dir="ltr">' + escapeHtml(c.u + ' / ' + c.p) + '</bdi>' : 'كلمة المرور فقط: <bdi dir="ltr">' + escapeHtml(c.p) + '</bdi>'; }
+  function rtUrl(ip, c) { return c ? 'http://' + encodeURIComponent(c.u || '') + ':' + encodeURIComponent(c.p) + '@' + ip + '/' : 'http://' + ip + '/'; }
+  function rtOpen(url) { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.style.display = 'none'; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 800); }
+  function rtCopyFallback(text) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (_) {} ta.remove(); return ok;
+  }
+  function rtCopy(text) {
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).catch(() => rtCopyFallback(text)); return true; } } catch (_) {}
+    return rtCopyFallback(text);
+  }
+  function rtCopyValue(c) { return c.p; }   // ma999/ma999 تُنسخ مرة واحدة وتُلصق في الخانتين؛ ubnt: يُكتب اسم المستخدم يدويًا
+  function rtHeader(r, name) {
+    const h = r && r.headers; if (!h) return '';
+    const k = Object.keys(h).find(x => x.toLowerCase() === name.toLowerCase());
+    return k ? String(h[k]) : '';
+  }
+  async function rtProbe(ip, creds) {
+    const cap = rtCap(), http = cap && cap.Plugins && cap.Plugins.CapacitorHttp;
+    if (!http) return { type: 'nocap' };
+    const base = 'http://' + ip + '/';
+    const get = hdrs => Promise.race([
+      http.request({ url: base, method: 'GET', headers: Object.assign({ 'Accept': 'text/html,*/*' }, hdrs || {}), disableRedirects: true, responseType: 'text', connectTimeout: 5000, readTimeout: 7000 }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 9000))
+    ]);
+    let r;
+    try { r = await get(); } catch (e) { return { type: 'unreachable', err: String(e && e.message || e) }; }
+    const wa = rtHeader(r, 'www-authenticate');
+    if (r.status === 401 && /basic/i.test(wa)) {
+      for (let i = 0; i < creds.length; i++) {
+        const c = creds[i];
+        const auth = 'Basic ' + btoa(unescape(encodeURIComponent((c.u || '') + ':' + c.p)));
+        try { const rr = await get({ 'Authorization': auth }); if (rr.status !== 401 && rr.status !== 403) return { type: 'basic', i: i }; } catch (_) {}
+      }
+      return { type: 'basic-nomatch' };
+    }
+    if (r.status === 401) return { type: 'other-auth' };
+    const body = typeof r.data === 'string' ? r.data : '';
+    const loc = rtHeader(r, 'location');
+    if (/type\s*=\s*["']?password/i.test(body) || (r.status >= 300 && r.status < 400 && /login|auth/i.test(loc))) return { type: 'form' };
+    return { type: 'open' };
+  }
+
+  function rtShell(inner) {
+    const old = document.getElementById('rtSheet'); if (old) old.remove();
+    const ov = document.createElement('div'); ov.id = 'rtSheet';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9800;display:flex;align-items:center;justify-content:center;padding:12px;';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px;width:100%;max-width:480px;max-height:90vh;overflow:auto;direction:rtl;">' + inner + '</div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    return ov;
+  }
+  const RT_BTN = 'border:0;border-radius:8px;padding:10px 14px;font-size:15px;cursor:pointer;font-family:inherit;';
+  function rtEditCreds(ip) {
+    const ov = rtShell('<b style="font-size:17px">🔑 بيانات دخول الراوتر</b>' +
+      '<div style="font-size:12px;color:#555;margin:6px 0">سطر لكل خيار بالترتيب الذي سيُجرَّب: <b dir="ltr">المستخدم|كلمة المرور</b>. اترك المستخدم فارغاً لكلمة المرور فقط (مثال: <span dir="ltr">|yasar2026</span>).</div>' +
+      '<textarea id="rtTa" rows="6" dir="ltr" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #bbb;border-radius:8px;font-size:15px;font-family:monospace">' +
+      escapeHtml(rtCreds().map(c => (c.u || '') + '|' + c.p).join('\n')) + '</textarea>' +
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="rtSave" style="' + RT_BTN + 'background:#2e7d32;color:#fff">💾 حفظ</button>' +
+      '<button type="button" id="rtReset" style="' + RT_BTN + 'background:#fff3e0">↺ الافتراضي</button><button type="button" id="rtX" style="' + RT_BTN + 'background:#ddd">إغلاق</button></div>');
+    ov.querySelector('#rtX').onclick = () => { ov.remove(); if (ip) rtSheet(ip); };
+    ov.querySelector('#rtReset').onclick = () => { try { localStorage.removeItem(RT_CREDS_KEY); } catch (_) {} ov.querySelector('#rtTa').value = RT_DEFAULT.map(c => c.u + '|' + c.p).join('\n'); };
+    ov.querySelector('#rtSave').onclick = () => {
+      const list = [];
+      ov.querySelector('#rtTa').value.split('\n').forEach(line => {
+        if (!line.trim()) return;
+        const k = line.indexOf('|'), u = k >= 0 ? line.slice(0, k).trim() : '', p = (k >= 0 ? line.slice(k + 1) : line).trim();
+        if (p) list.push({ u: u, p: p });
+      });
+      if (!list.length) { showToast('أدخل سطراً واحداً على الأقل', 'error'); return; }
+      try { localStorage.setItem(RT_CREDS_KEY, JSON.stringify(list)); } catch (_) {}
+      showToast('✅ تم حفظ بيانات الراوتر');
+      ov.remove(); if (ip) rtSheet(ip);
+    };
+  }
+  function rtListHTML(creds) {
+    return creds.map((c, i) => {
+      const note = (c.u && c.u !== c.p) ? 'ينسخ كلمة المرور · اكتب المستخدم: <b dir="ltr">' + escapeHtml(c.u) + '</b>' : 'ينسخ <b dir="ltr">' + escapeHtml(c.p) + '</b>' + (c.u ? ' (يُلصق في الخانتين)' : ' (يُلصق في خانة كلمة المرور)');
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #eee;padding:8px 0"><div><div style="font-weight:700">' + rtLabelHTML(c) + '</div><div style="font-size:11px;color:#667">' + note + '</div></div>' +
+        '<button type="button" data-ci="' + i + '" style="' + RT_BTN + 'background:#e3f2fd;white-space:nowrap">نسخ وفتح</button></div>';
+    }).join('');
+  }
+  async function rtSheet(ip) {
+    const creds = rtCreds(), remembered = rtMap()[ip];
+    const ov = rtShell('<b style="font-size:17px">🌐 راوتر <span dir="ltr">' + escapeHtml(ip) + '</span></b>' +
+      '<div id="rtStatus" style="margin:8px 0;font-size:14px;color:#555">⏳ جاري فحص طريقة الدخول...</div><div id="rtBody"></div>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="rtEdit" style="' + RT_BTN + 'background:#fff3e0">✏️ تعديل القائمة</button>' +
+      (remembered ? '<button type="button" id="rtForget" style="' + RT_BTN + 'background:#fdecea">🗑 نسيان الاختيار</button>' : '') +
+      '<button type="button" id="rtX" style="' + RT_BTN + 'background:#ddd">إغلاق</button></div>');
+    const st = ov.querySelector('#rtStatus'), body = ov.querySelector('#rtBody');
+    ov.querySelector('#rtX').onclick = () => ov.remove();
+    ov.querySelector('#rtEdit').onclick = () => rtEditCreds(ip);
+    const fg = ov.querySelector('#rtForget'); if (fg) fg.onclick = () => { rtSetMap(ip, null); showToast('تم نسيان اختيار هذا الراوتر'); ov.remove(); };
+    function bindList() {
+      Array.prototype.forEach.call(body.querySelectorAll('[data-ci]'), b => {
+        b.onclick = () => {
+          const c = creds[+b.getAttribute('data-ci')];
+          rtCopy(rtCopyValue(c));
+          rtSetMap(ip, { mode: 'copy', u: c.u, p: c.p });
+          showToast('📋 تم النسخ — الصقه في صفحة الراوتر' + (c.u && c.u !== c.p ? ' (المستخدم: ' + c.u + ')' : ''), 'info');
+          rtOpen(rtUrl(ip, null)); ov.remove();
+        };
+      });
+      const any = body.querySelector('#rtAny'); if (any) any.onclick = () => { rtOpen(rtUrl(ip, null)); ov.remove(); };
+    }
+    const res = await rtProbe(ip, creds);
+    if (!document.body.contains(ov)) return;
+    const anyBtn = '<div style="margin-top:8px"><button type="button" id="rtAny" style="' + RT_BTN + 'background:#ddd">فتح بدون بيانات</button></div>';
+    if (res.type === 'basic') {
+      const c = creds[res.i];
+      st.innerHTML = '<span style="color:#2e7d32;font-weight:700">✅ وُجدت بيانات تعمل: ' + rtLabelHTML(c) + '</span><div style="font-size:12px;color:#667">دخول تلقائي — لا حاجة للّصق</div>';
+      body.innerHTML = '<button type="button" id="rtGo" style="' + RT_BTN + 'background:#2e7d32;color:#fff;width:100%">🚀 فتح الراوتر (دخول تلقائي)</button>';
+      body.querySelector('#rtGo').onclick = () => { rtSetMap(ip, { mode: 'basic', u: c.u, p: c.p }); rtOpen(rtUrl(ip, c)); ov.remove(); };
+      return;
+    }
+    const msg = { 'basic-nomatch': '⚠️ الراوتر يطلب كلمة مرور ولا تنطبق عليه القائمة. اختر ما تريد نسخه، أو عدّل القائمة.',
+      'form': '🔐 صفحة دخول بنموذج ويب: لا يمكن تعبئتها تلقائياً من خارجها. اختر لنسخ كلمة المرور ثم الصقها.',
+      'other-auth': '🔐 الراوتر يستخدم نوع دخول غير مدعوم للتلقائي. اختر لنسخ كلمة المرور.',
+      'open': 'ℹ️ لم أجد صفحة دخول. يمكنك فتح الراوتر مباشرة أو نسخ كلمة المرور.',
+      'unreachable': '❌ تعذّر الوصول إلى الراوتر (تأكد أنك على شبكة المشترك أو أنه مفتوح).',
+      'nocap': 'ℹ️ الفحص التلقائي غير متاح هنا. اختر لنسخ كلمة المرور.' }[res.type] || '';
+    st.textContent = msg;
+    body.innerHTML = rtListHTML(creds) + anyBtn;
+    bindList();
+  }
+  window.__rdRouter = rtSheet;
+  document.addEventListener('click', function (e) {
+    const a = e.target && e.target.closest ? e.target.closest('a.cur-ip') : null;
+    if (!a || !IS_NATIVE_APP) return;
+    e.preventDefault(); e.stopPropagation();
+    const ip = a.textContent.trim(), m = rtMap()[ip];
+    if (m && m.mode === 'basic') { rtOpen(rtUrl(ip, { u: m.u, p: m.p })); return; }
+    if (m && m.mode === 'copy') { rtCopy(m.p); showToast('📋 تم نسخ ' + (m.u && m.u === m.p ? m.p : 'كلمة المرور') + (m.u && m.u !== m.p ? ' — المستخدم: ' + m.u : ''), 'info'); rtOpen(rtUrl(ip, null)); return; }
+    rtSheet(ip);
+  }, true);
+  document.addEventListener('contextmenu', function (e) {   // ضغطة مطولة: اختيار البيانات من جديد
+    const a = e.target && e.target.closest ? e.target.closest('a.cur-ip') : null;
+    if (!a || !IS_NATIVE_APP) return;
+    e.preventDefault(); e.stopPropagation(); rtSheet(a.textContent.trim());
+  }, true);
+
+
   /* ========== منطق الأسعار ========== */
   function formatPriceValue(v) {
     if (v === null || v === undefined || v === '') return '';
@@ -4559,108 +4712,6 @@ window.Papa = { parse: function (text, opts) {
     e.stopImmediatePropagation(); e.preventDefault();
     if (longPressed) { longPressed = false; return; }
     refresh();
-  }, true);
-})();
-</script>
-
-<script>
-/* ===== فتح الراوتر مع تعبئة تلقائية لكلمة الدخول ===== */
-(function () {
-  var PK = 'routerPresets', MK = 'routerPresetMemo';
-  var DEF = [{ u: 'ma999', p: 'ma999' }, { u: '', p: 'ma999ma999' }, { u: '', p: 'yasar2026' }, { u: 'ubnt', p: 'yasar2026' }];
-  function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k) || 'null'); return v || d; } catch (_) { return d; } }
-  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
-  function presets() { var a = load(PK, null); return (a && a.length) ? a : DEF; }
-  function label(c) { return c.u ? (c.u + ' / ' + c.p) : ('كلمة المرور فقط: ' + c.p); }
-  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function hostOf(h) { try { return new URL(h).hostname; } catch (_) { return h; } }
-  function toast(m) { if (typeof showToast === 'function') showToast(m); else alert(m); }
-  function copy(t) {
-    try { if (typeof copyToClipboard === 'function') { copyToClipboard(t, '📋 تم نسخ كلمة المرور — الصقها في الراوتر'); return; } } catch (_) {}
-    try { navigator.clipboard.writeText(t); toast('📋 تم نسخ كلمة المرور'); } catch (_) {}
-  }
-
-  /* كود يُحقن داخل صفحة الراوتر: يملأ الحقول ويضغط دخول */
-  function fillCode(u, p) {
-    return '(function(u,p){var n=0;function setv(e,v){try{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,v);}catch(_){e.value=v;}["input","change","keyup"].forEach(function(t){e.dispatchEvent(new Event(t,{bubbles:true}));});}' +
-      'function vis(e){return e.offsetWidth>0||e.offsetHeight>0;}' +
-      'function go(){var pw=[].slice.call(document.querySelectorAll("input[type=password]")).filter(vis)[0];if(!pw){if(++n<20)setTimeout(go,500);return;}' +
-      'var all=[].slice.call(document.querySelectorAll("input")).filter(vis);var i=all.indexOf(pw);var us=null;' +
-      'for(var k=i-1;k>=0;k--){var t=(all[k].type||"text").toLowerCase();if(t=="text"||t=="email"||t=="tel"){us=all[k];break;}}' +
-      'if(u&&us)setv(us,u);setv(pw,p);' +
-      'setTimeout(function(){var f=pw.form;var b=(f||document).querySelector("button[type=submit],input[type=submit],button,input[type=button],#login,.login");if(b)b.click();else if(f)f.submit();},400);}go();})(' +
-      JSON.stringify(u) + ',' + JSON.stringify(p) + ');';
-  }
-
-  function openRouter(href, c, uname) {
-    var memo = load(MK, {}); memo[hostOf(href)] = c; save(MK, memo);
-    var cd = null;
-    [window, window.top, window.parent].forEach(function (w) { try { if (!cd && w && w.cordova && w.cordova.InAppBrowser) cd = w.cordova; } catch (_) {} });
-    if (cd && cd.InAppBrowser) {               /* تعبئة تلقائية كاملة (بعد إضافة الإضافة وإعادة البناء) */
-      var ref = cd.InAppBrowser.open(href, '_blank', 'location=yes,zoom=no'), cnt = 0;
-      ref.addEventListener('loadstop', function () { if (cnt++ < 2) ref.executeScript({ code: fillCode(c.u, c.p) }); });
-      return;
-    }
-    /* بديل: نسخ كلمة المرور + فتح الرابط (مع user:pass لراوترات Basic Auth) */
-    var _cn = ''; try { _cn = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ? 'native' : 'web'; } catch (_) {}
-    setTimeout(function () { toast('⚠️ المتصفح الداخلي غير متوفر (' + (_cn || '?') + ') — تم النسخ والفتح بالمتصفح'); }, 1500);
-    copy(c.p);
-    var url = href;
-    if (c.u) url = href.replace(/^(https?:\/\/)/, '$1' + encodeURIComponent(c.u) + ':' + encodeURIComponent(c.p) + '@');
-    var w = null; try { w = window.open(url, '_blank'); } catch (_) {}
-    if (!w) { try { window.top.location.href = url; } catch (_) {} }
-  }
-
-  function closeSheet() { var o = document.getElementById('rtOverlay'); if (o) o.remove(); }
-  function sheet(href, uname) {
-    closeSheet();
-    var list = presets(), memo = load(MK, {})[hostOf(href)];
-    var o = document.createElement('div'); o.id = 'rtOverlay';
-    o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:flex-end;justify-content:center;';
-    var h = '<div style="background:#fff;width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:14px;direction:rtl;max-height:85vh;overflow:auto">' +
-      '<div style="font-weight:700;color:#1a2a4a;margin-bottom:4px">🔐 فتح الراوتر</div>' +
-      '<div style="direction:ltr;text-align:left;font-family:monospace;color:#0d47a1;margin-bottom:10px">' + esc(href) + '</div>';
-    list.forEach(function (c, i) {
-      var last = memo && memo.u === c.u && memo.p === c.p;
-      h += '<button data-i="' + i + '" style="display:block;width:100%;text-align:right;padding:12px;margin:6px 0;border:1.5px solid ' + (last ? '#2e7d32' : '#dce5f0') + ';background:' + (last ? '#e8f5e9' : '#f8faff') + ';border-radius:10px;font-size:15px;font-weight:600;color:#1f3a5f;cursor:pointer">' +
-        (last ? '✅ ' : '🔑 ') + esc(label(c)) + '</button>';
-    });
-    h += '<div style="display:flex;gap:8px;margin-top:10px"><button id="rtEdit" style="flex:1;padding:10px;border:0;border-radius:8px;background:#eef3fa;cursor:pointer">⚙️ تعديل القائمة</button>' +
-      '<button id="rtPlain" style="flex:1;padding:10px;border:0;border-radius:8px;background:#eef3fa;cursor:pointer">فتح بدون دخول</button>' +
-      '<button id="rtClose" style="flex:1;padding:10px;border:0;border-radius:8px;background:#ffebee;cursor:pointer">إغلاق</button></div></div>';
-    o.innerHTML = h; document.body.appendChild(o);
-    o.addEventListener('click', function (e) {
-      if (e.target === o || e.target.id === 'rtClose') return closeSheet();
-      if (e.target.id === 'rtPlain') { closeSheet(); try { window.open(href, '_blank'); } catch (_) {} return; }
-      if (e.target.id === 'rtEdit') return editSheet(href, uname);
-      var b = e.target.closest('button[data-i]');
-      if (b) { var c = list[+b.dataset.i]; closeSheet(); openRouter(href, c, uname); }
-    });
-  }
-  function editSheet(href, uname) {
-    var o = document.getElementById('rtOverlay'); if (!o) return;
-    var txt = presets().map(function (c) { return c.u + ':' + c.p; }).join('\n');
-    o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:14px;direction:rtl">' +
-      '<div style="font-weight:700;margin-bottom:6px">⚙️ قائمة كلمات الراوتر</div>' +
-      '<div style="font-size:12px;color:#6a7e9e;margin-bottom:6px">سطر لكل خيار بصيغة <b>المستخدم:كلمة المرور</b>. اترك المستخدم فارغاً لراوتر يطلب كلمة المرور فقط (مثل <code>:yasar2026</code>).</div>' +
-      '<textarea id="rtTxt" style="width:100%;min-height:150px;direction:ltr;font-family:monospace;padding:8px;border:1px solid #bbb;border-radius:8px">' + esc(txt) + '</textarea>' +
-      '<div style="display:flex;gap:8px;margin-top:8px"><button id="rtSave" style="flex:1;padding:10px;border:0;border-radius:8px;background:#2e7d32;color:#fff">حفظ</button>' +
-      '<button id="rtBack" style="flex:1;padding:10px;border:0;border-radius:8px;background:#eef3fa">رجوع</button></div></div>';
-    o.onclick = function (e) {
-      if (e.target.id === 'rtBack') return sheet(href, uname);
-      if (e.target.id === 'rtSave') {
-        var a = document.getElementById('rtTxt').value.split(/\r?\n/).map(function (l) { l = l.trim(); if (!l) return null; var i = l.indexOf(':'); return i < 0 ? { u: '', p: l } : { u: l.slice(0, i).trim(), p: l.slice(i + 1).trim() }; }).filter(function (c) { return c && c.p; });
-        save(PK, a); sheet(href, uname);
-      }
-    };
-  }
-
-  document.addEventListener('click', function (e) {
-    var a = e.target.closest && e.target.closest('.ip-link');
-    if (!a) return;
-    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-    var cell = a.closest('.ip-display') || a.parentNode, eb = cell && cell.querySelector('.ip-edit-btn');
-    sheet(a.getAttribute('href'), eb ? eb.dataset.username : '');
   }, true);
 })();
 </script>
