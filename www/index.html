@@ -4563,5 +4563,104 @@ window.Papa = { parse: function (text, opts) {
 })();
 </script>
 
+<script>
+/* ===== فتح الراوتر مع تعبئة تلقائية لكلمة الدخول ===== */
+(function () {
+  var PK = 'routerPresets', MK = 'routerPresetMemo';
+  var DEF = [{ u: 'ma999', p: 'ma999' }, { u: '', p: 'ma999ma999' }, { u: '', p: 'yasar2026' }, { u: 'ubnt', p: 'yasar2026' }];
+  function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k) || 'null'); return v || d; } catch (_) { return d; } }
+  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
+  function presets() { var a = load(PK, null); return (a && a.length) ? a : DEF; }
+  function label(c) { return c.u ? (c.u + ' / ' + c.p) : ('كلمة المرور فقط: ' + c.p); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function hostOf(h) { try { return new URL(h).hostname; } catch (_) { return h; } }
+  function toast(m) { if (typeof showToast === 'function') showToast(m); else alert(m); }
+  function copy(t) {
+    try { if (typeof copyToClipboard === 'function') { copyToClipboard(t, '📋 تم نسخ كلمة المرور — الصقها في الراوتر'); return; } } catch (_) {}
+    try { navigator.clipboard.writeText(t); toast('📋 تم نسخ كلمة المرور'); } catch (_) {}
+  }
+
+  /* كود يُحقن داخل صفحة الراوتر: يملأ الحقول ويضغط دخول */
+  function fillCode(u, p) {
+    return '(function(u,p){var n=0;function setv(e,v){try{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,v);}catch(_){e.value=v;}["input","change","keyup"].forEach(function(t){e.dispatchEvent(new Event(t,{bubbles:true}));});}' +
+      'function vis(e){return e.offsetWidth>0||e.offsetHeight>0;}' +
+      'function go(){var pw=[].slice.call(document.querySelectorAll("input[type=password]")).filter(vis)[0];if(!pw){if(++n<20)setTimeout(go,500);return;}' +
+      'var all=[].slice.call(document.querySelectorAll("input")).filter(vis);var i=all.indexOf(pw);var us=null;' +
+      'for(var k=i-1;k>=0;k--){var t=(all[k].type||"text").toLowerCase();if(t=="text"||t=="email"||t=="tel"){us=all[k];break;}}' +
+      'if(u&&us)setv(us,u);setv(pw,p);' +
+      'setTimeout(function(){var f=pw.form;var b=(f||document).querySelector("button[type=submit],input[type=submit],button,input[type=button],#login,.login");if(b)b.click();else if(f)f.submit();},400);}go();})(' +
+      JSON.stringify(u) + ',' + JSON.stringify(p) + ');';
+  }
+
+  function openRouter(href, c, uname) {
+    var memo = load(MK, {}); memo[hostOf(href)] = c; save(MK, memo);
+    var cd = window.cordova;
+    if (cd && cd.InAppBrowser) {               /* تعبئة تلقائية كاملة (بعد إضافة الإضافة وإعادة البناء) */
+      var ref = cd.InAppBrowser.open(href, '_blank', 'location=yes,zoom=no'), cnt = 0;
+      ref.addEventListener('loadstop', function () { if (cnt++ < 2) ref.executeScript({ code: fillCode(c.u, c.p) }); });
+      return;
+    }
+    /* بديل: نسخ كلمة المرور + فتح الرابط (مع user:pass لراوترات Basic Auth) */
+    copy(c.p);
+    var url = href;
+    if (c.u) url = href.replace(/^(https?:\/\/)/, '$1' + encodeURIComponent(c.u) + ':' + encodeURIComponent(c.p) + '@');
+    var w = null; try { w = window.open(url, '_blank'); } catch (_) {}
+    if (!w) { try { window.top.location.href = url; } catch (_) {} }
+  }
+
+  function closeSheet() { var o = document.getElementById('rtOverlay'); if (o) o.remove(); }
+  function sheet(href, uname) {
+    closeSheet();
+    var list = presets(), memo = load(MK, {})[hostOf(href)];
+    var o = document.createElement('div'); o.id = 'rtOverlay';
+    o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:flex-end;justify-content:center;';
+    var h = '<div style="background:#fff;width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:14px;direction:rtl;max-height:85vh;overflow:auto">' +
+      '<div style="font-weight:700;color:#1a2a4a;margin-bottom:4px">🔐 فتح الراوتر</div>' +
+      '<div style="direction:ltr;text-align:left;font-family:monospace;color:#0d47a1;margin-bottom:10px">' + esc(href) + '</div>';
+    list.forEach(function (c, i) {
+      var last = memo && memo.u === c.u && memo.p === c.p;
+      h += '<button data-i="' + i + '" style="display:block;width:100%;text-align:right;padding:12px;margin:6px 0;border:1.5px solid ' + (last ? '#2e7d32' : '#dce5f0') + ';background:' + (last ? '#e8f5e9' : '#f8faff') + ';border-radius:10px;font-size:15px;font-weight:600;color:#1f3a5f;cursor:pointer">' +
+        (last ? '✅ ' : '🔑 ') + esc(label(c)) + '</button>';
+    });
+    h += '<div style="display:flex;gap:8px;margin-top:10px"><button id="rtEdit" style="flex:1;padding:10px;border:0;border-radius:8px;background:#eef3fa;cursor:pointer">⚙️ تعديل القائمة</button>' +
+      '<button id="rtPlain" style="flex:1;padding:10px;border:0;border-radius:8px;background:#eef3fa;cursor:pointer">فتح بدون دخول</button>' +
+      '<button id="rtClose" style="flex:1;padding:10px;border:0;border-radius:8px;background:#ffebee;cursor:pointer">إغلاق</button></div></div>';
+    o.innerHTML = h; document.body.appendChild(o);
+    o.addEventListener('click', function (e) {
+      if (e.target === o || e.target.id === 'rtClose') return closeSheet();
+      if (e.target.id === 'rtPlain') { closeSheet(); try { window.open(href, '_blank'); } catch (_) {} return; }
+      if (e.target.id === 'rtEdit') return editSheet(href, uname);
+      var b = e.target.closest('button[data-i]');
+      if (b) { var c = list[+b.dataset.i]; closeSheet(); openRouter(href, c, uname); }
+    });
+  }
+  function editSheet(href, uname) {
+    var o = document.getElementById('rtOverlay'); if (!o) return;
+    var txt = presets().map(function (c) { return c.u + ':' + c.p; }).join('\n');
+    o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:14px;direction:rtl">' +
+      '<div style="font-weight:700;margin-bottom:6px">⚙️ قائمة كلمات الراوتر</div>' +
+      '<div style="font-size:12px;color:#6a7e9e;margin-bottom:6px">سطر لكل خيار بصيغة <b>المستخدم:كلمة المرور</b>. اترك المستخدم فارغاً لراوتر يطلب كلمة المرور فقط (مثل <code>:yasar2026</code>).</div>' +
+      '<textarea id="rtTxt" style="width:100%;min-height:150px;direction:ltr;font-family:monospace;padding:8px;border:1px solid #bbb;border-radius:8px">' + esc(txt) + '</textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:8px"><button id="rtSave" style="flex:1;padding:10px;border:0;border-radius:8px;background:#2e7d32;color:#fff">حفظ</button>' +
+      '<button id="rtBack" style="flex:1;padding:10px;border:0;border-radius:8px;background:#eef3fa">رجوع</button></div></div>';
+    o.onclick = function (e) {
+      if (e.target.id === 'rtBack') return sheet(href, uname);
+      if (e.target.id === 'rtSave') {
+        var a = document.getElementById('rtTxt').value.split(/\r?\n/).map(function (l) { l = l.trim(); if (!l) return null; var i = l.indexOf(':'); return i < 0 ? { u: '', p: l } : { u: l.slice(0, i).trim(), p: l.slice(i + 1).trim() }; }).filter(function (c) { return c && c.p; });
+        save(PK, a); sheet(href, uname);
+      }
+    };
+  }
+
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('.ip-link');
+    if (!a) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    var cell = a.closest('.ip-display') || a.parentNode, eb = cell && cell.querySelector('.ip-edit-btn');
+    sheet(a.getAttribute('href'), eb ? eb.dataset.username : '');
+  }, true);
+})();
+</script>
+
 </body>
 </html>
