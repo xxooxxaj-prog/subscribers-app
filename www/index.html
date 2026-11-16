@@ -4594,13 +4594,16 @@ window.Papa = { parse: function (text, opts) {
 
   function openRouter(href, c, uname) {
     var memo = load(MK, {}); memo[hostOf(href)] = c; save(MK, memo);
-    var cd = window.cordova;
+    var cd = null;
+    [window, window.top, window.parent].forEach(function (w) { try { if (!cd && w && w.cordova && w.cordova.InAppBrowser) cd = w.cordova; } catch (_) {} });
     if (cd && cd.InAppBrowser) {               /* تعبئة تلقائية كاملة (بعد إضافة الإضافة وإعادة البناء) */
       var ref = cd.InAppBrowser.open(href, '_blank', 'location=yes,zoom=no'), cnt = 0;
       ref.addEventListener('loadstop', function () { if (cnt++ < 2) ref.executeScript({ code: fillCode(c.u, c.p) }); });
       return;
     }
     /* بديل: نسخ كلمة المرور + فتح الرابط (مع user:pass لراوترات Basic Auth) */
+    var _cn = ''; try { _cn = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ? 'native' : 'web'; } catch (_) {}
+    setTimeout(function () { toast('⚠️ المتصفح الداخلي غير متوفر (' + (_cn || '?') + ') — تم النسخ والفتح بالمتصفح'); }, 1500);
     copy(c.p);
     var url = href;
     if (c.u) url = href.replace(/^(https?:\/\/)/, '$1' + encodeURIComponent(c.u) + ':' + encodeURIComponent(c.p) + '@');
